@@ -23,8 +23,6 @@ typedef struct {
 
   word pc;
 
-  word af;
-
   byte  a, f;
   byte  b, c;
   byte  d, e;

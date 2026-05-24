@@ -1,6 +1,11 @@
 SERIAL = 0
 
-start:
+; start:
+;   ld   bc,message
+;   call print
+;   halt
+
+print:
   ld   bc,message
 loop:
   ld   a,(bc)
@@ -10,6 +15,7 @@ loop:
   inc  bc
   jr   loop
 done:
+;  ret
   halt
 
 message:

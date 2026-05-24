@@ -9,7 +9,9 @@
 #define F_N  1
 #define F_C  0
 
-static word z80_pair(byte hi, byte lo) { return (hi << 8) | lo; }
+static word z80_pair(byte hi, byte lo) {
+  return (hi << 8) | lo;
+}
 
 static void z80_error(char *s) {
   fprintf(stderr, "ozm: %s\n", s);
@@ -19,17 +21,25 @@ static void z80_error(char *s) {
 static byte z80_read(z80_cpu *cpu, word addr) {
   uint8_t dev_id = cpu->mem_map[addr];
   z80_device *dev = &cpu->devices[dev_id];
+  if (!dev->read) z80_error("unmapped memory area accessed");
   return dev->read(dev->state, addr);
 }
 
 static void z80_write(z80_cpu *cpu, word addr, byte data) {
   uint8_t dev_id = cpu->mem_map[addr];
   z80_device *dev = &cpu->devices[dev_id];
+  if (!dev->write) z80_error("unmapped memory area accessed");
   dev->write(dev->state, addr, data);
 }
 
 static byte z80_fetch(z80_cpu *cpu) {
   return z80_read(cpu, cpu->pc++);
+}
+
+static word z80_fetch16(z80_cpu *cpu) {
+  byte lo = z80_fetch(cpu);
+  byte hi = z80_fetch(cpu);
+  return z80_pair(hi, lo);
 }
 
 // static void z80_nfetch(z80_cpu *cpu, byte *buf, size_t n) {
@@ -75,9 +85,9 @@ static void z80_dec_8bit(z80_cpu *cpu, byte *val) {
 }
 
 static void z80_rlcx(z80_cpu *cpu, byte *val) {
-  bool old_bit = *val & 0x01;
+  bool old_bit = *val & 0x80;
   *val = *val << 1;
-  *val |= old_bit << 7;
+  *val |= old_bit;
   z80_flag(cpu, F_C, old_bit);
   z80_flag(cpu, F_N, 0);
   z80_flag(cpu, F_H, 0);
@@ -284,11 +294,131 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_add_16bit(cpu, &cpu->h, &cpu->l, &cpu->d, &cpu->e);
     break;
 
+  // ld a,(de)
+  case 0x1a:
+    cpu->a = z80_read(cpu, z80_pair(cpu->d, cpu->e));
+    break;
+
+  // dec de
+  case 0x1b:
+    if (cpu->e-- == 0) cpu->d--;
+    break;
+
+  // inc e
+  case 0x1c:
+    z80_inc_8bit(cpu, &cpu->e);
+    break;
+
+  // dec e
+  case 0x1d:
+    z80_dec_8bit(cpu, &cpu->e);
+    break;
+
+  // ld e,n
+  case 0x1e:
+    cpu->e = z80_fetch(cpu);
+    break;
+
+  // rra
+  case 0x1f: {
+    bool old_bit = cpu->a & 0x01;
+    cpu->a >>= 1;
+    cpu->a |= z80_getflag(cpu, F_C) << 7;
+    z80_flag(cpu, F_C, old_bit);
+    z80_flag(cpu, F_H, 0);
+    z80_flag(cpu, F_N, 0);
+  } break;
+
+  // jr nz,d
+  case 0x20:
+    z80_jr(cpu, !z80_getflag(cpu, F_Z));
+    break;
+
+  // ld hl,nn
+  case 0x21:
+    cpu->l = z80_fetch(cpu);
+    cpu->h = z80_fetch(cpu);
+  break;
+
+  // ld (nn),hl
+  case 0x22: {
+    word addr = z80_fetch16(cpu);
+    z80_write(cpu, addr,   cpu->l);
+    z80_write(cpu, addr+1, cpu->h);
+  } break;
+
+  // inc hl
+  case 0x23:
+    if (++cpu->l == 0) cpu->h++;
+    break;
+
+  // inc h
+  case 0x24:
+    z80_inc_8bit(cpu, &cpu->h);
+    break;
+
+  // dec h
+  case 0x25:
+    z80_dec_8bit(cpu, &cpu->h);
+    break;
+
+  // ld h,n
+  case 0x26:
+    cpu->h = z80_fetch(cpu);
+    break;
+
+  // daa
+  case 0x27:
+    z80_error("bcd arithmetic is not supported");
+    break;
+
   // jr z,d
   case 0x28:
     z80_jr(cpu, z80_getflag(cpu, F_Z));
     break;
 
+  // add hl,hl
+  case 0x29:
+    z80_add_16bit(cpu, &cpu->h, &cpu->l,
+                       &cpu->h, &cpu->l);
+    break;
+
+  // ld hl,(nn)
+  case 0x2a:
+    word addr = z80_fetch16(cpu);
+    cpu->l = z80_read(cpu, addr);
+    cpu->h = z80_read(cpu, addr+1);
+    break;
+
+  // dec hl
+  case 0x2b:
+    if (cpu->l-- == 0) cpu->h--;
+    break;
+
+  // inc l
+  case 0x2c:
+    z80_inc_8bit(cpu, &cpu->l);
+    break;
+
+  // dec l
+  case 0x2d:
+    z80_dec_8bit(cpu, &cpu->l);
+    break;
+
+  // ld l,n
+  case 0x2e:
+    cpu->l = z80_fetch(cpu);
+    break;
+
+  // cpl
+  case 0x2f:
+    cpu->a = ~cpu->a;
+    break;
+
+  // jr nc,d
+  case 0x30:
+    z80_jr(cpu, !z80_getflag(cpu, F_C));
+    break;
 
   // ld a,n
   case 0x3e:
@@ -297,9 +427,7 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // ld (nn),a
   case 0x32: {
-    byte lo = z80_fetch(cpu);
-    byte hi = z80_fetch(cpu);
-    z80_write(cpu, z80_pair(hi, lo), cpu->a);
+    z80_write(cpu, z80_fetch16(cpu), cpu->a);
   } break;
 
   // halt
@@ -321,6 +449,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   case 0xdb:
     cpu->a = cpu->io_in(z80_pair(cpu->a, z80_fetch(cpu)));
     break;
+
+  // jp nn
+  case 0xc3: {
+    cpu->pc = z80_fetch16(cpu);
+  } break;
 
   // cp n
   case 0xfe:
@@ -347,6 +480,8 @@ z80_instr z80_decode(z80_cpu *cpu) {
          (instr.prefix[0] == 0xfd && instr.prefix[1] == 0xcb));
 
     if (is_prefix) {
+      if (instr.prefix_len == sizeof(instr.prefix))
+        z80_error("malformed instruction");
       instr.prefix[instr.prefix_len++] = b;
     } else if (is_displacement_byte) {
       instr.displacement = b;
@@ -369,14 +504,29 @@ bool z80_execute(z80_cpu *cpu, z80_instr *instr) {
   }
 }
 
-void z80_debug_print(z80_cpu *cpu) {
-  printf("pc: %04x\n", cpu->pc);
-  printf("f:  %08b\n",  cpu->f);
-  printf("\n");
-  printf("regs:\n");
-  printf("a: %02x f: %02x\n", cpu->a, cpu->f);
-  printf("b: %02x c: %02x\n", cpu->b, cpu->c);
-  printf("d: %02x e: %02x\n", cpu->d, cpu->e);
-  printf("h: %02x l: %02x\n", cpu->h, cpu->l);
+void z80_debug_print_flags(z80_cpu *cpu) {
+  bool s  = z80_getflag(cpu, F_S);
+  bool z  = z80_getflag(cpu, F_Z);
+  bool h  = z80_getflag(cpu, F_H);
+  bool pv = z80_getflag(cpu, F_PV);
+  bool n  = z80_getflag(cpu, F_N);
+  bool c  = z80_getflag(cpu, F_C);
+
+  printf("            sign: %c\n", s ? '-' : '+');
+  printf("            zero: %c= 0\n", z ? '=' : '!');
+  printf("      half-carry: %c\n", h ? 'y' : 'n');
+  printf(" parity/overflow: %c\n", pv ? 'y' : 'n');
+  printf("         add/sub: %c\n", n ? '-' : '+');
+  printf("           carry: %c\n", c ? 'y' : 'n');
 }
 
+void z80_debug_print(z80_cpu *cpu) {
+  printf("pc: %04xh\n", cpu->pc);
+  printf("\n");
+  z80_debug_print_flags(cpu);
+  printf("\n");
+  printf("a: %02x f: %02x, %5u\n", cpu->a, cpu->f, z80_pair(cpu->a, cpu->f));
+  printf("b: %02x c: %02x, %5u\n", cpu->b, cpu->c, z80_pair(cpu->b, cpu->c));
+  printf("d: %02x e: %02x, %5u\n", cpu->d, cpu->e, z80_pair(cpu->d, cpu->e));
+  printf("h: %02x l: %02x, %5u\n", cpu->h, cpu->l, z80_pair(cpu->h, cpu->l));
+}
