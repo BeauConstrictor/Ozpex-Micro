@@ -9,6 +9,8 @@
 #define F_N  1
 #define F_C  0
 
+#define HL(cpu) ( z80_pair(cpu->h, cpu->l) )
+
 static word z80_pair(byte hi, byte lo) {
   return (hi << 8) | lo;
 }
@@ -144,6 +146,44 @@ static byte z80_sub(z80_cpu *cpu, byte val) {
   z80_flag(cpu, F_S,  result >> 7);
 
   return result;
+}
+
+static void z80_inc_indirect(z80_cpu *cpu, word addr) {
+  byte val = z80_read(cpu, addr);
+  z80_inc_8bit(cpu, &val);
+  z80_write(cpu, addr, val);
+}
+
+static void z80_dec_indirect(z80_cpu *cpu, word addr) {
+  byte val = z80_read(cpu, addr);
+  z80_dec_8bit(cpu, &val);
+  z80_write(cpu, addr, val);
+}
+
+static void z80_add_8bit(z80_cpu *cpu, byte b) {
+  byte a = cpu->a;
+  byte r = a + b;
+  z80_flag(cpu, F_S, r >> 7);
+  z80_flag(cpu, F_Z, r == 0);
+  z80_flag(cpu, F_H, ((a & 0x0F) + (b& 0x0F)) > 0x0F);
+  z80_flag(cpu, F_PV, (~(a ^ b) & (a ^ r) & 0x80) != 0);
+  z80_flag(cpu, F_N, 0);
+  z80_flag(cpu, F_C, r < a);
+  cpu->a = r;
+}
+
+static void z80_adc_8bit(z80_cpu *cpu, byte b) {
+    byte a = cpu->a;
+    byte c = z80_getflag(cpu, F_C);
+    byte r = a + b + c;
+    z80_flag(cpu, F_S, (r & 0x80) != 0);
+    z80_flag(cpu, F_Z, r == 0);
+    z80_flag(cpu, F_H, ((a & 0x0F) + (b & 0x0F) + c) > 0x0F);
+    z80_flag(cpu, F_PV, (~(a ^ b) & (a ^ r) & 0x80) != 0);
+    z80_flag(cpu, F_N, 0);
+    z80_flag(cpu, F_C,
+        ((unsigned)a + (unsigned)b + (unsigned)c) > 0xFF);
+    cpu->a = r;
 }
 
 static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
@@ -384,11 +424,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     break;
 
   // ld hl,(nn)
-  case 0x2a:
+  case 0x2a: {
     word addr = z80_fetch16(cpu);
     cpu->l = z80_read(cpu, addr);
     cpu->h = z80_read(cpu, addr+1);
-    break;
+  } break;
 
   // dec hl
   case 0x2b:
@@ -413,6 +453,8 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   // cpl
   case 0x2f:
     cpu->a = ~cpu->a;
+    z80_flag(cpu, F_N, 1);
+    z80_flag(cpu, F_H, 1);
     break;
 
   // jr nc,d
@@ -420,19 +462,482 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_jr(cpu, !z80_getflag(cpu, F_C));
     break;
 
+  // ld sp,nn
+  case 0x31:
+    cpu->sp = z80_fetch16(cpu);
+    break;
+
+  // ld (nn),a
+  case 0x32:
+    z80_write(cpu, z80_fetch16(cpu), cpu->a);
+    break;
+
+  // inc sp
+  case 0x33:
+    cpu->sp++;
+    break;
+
+  // inc (hl)
+  case 0x34: {
+    word addr = HL(cpu);
+    z80_inc_indirect(cpu, addr);
+  } break;
+
+  // dec (hl)
+  case 0x35: {
+    word addr = HL(cpu);
+    z80_dec_indirect(cpu, addr);
+  } break;
+
+  // ld (hl),n
+  case 0x36:
+    z80_write(cpu, HL(cpu), z80_fetch(cpu));
+    break;
+
+  // scf
+  case 0x37:
+    z80_flag(cpu, F_C, 1);
+    z80_flag(cpu, F_H, 0);
+    z80_flag(cpu, F_N, 0);
+    break;
+
+  // jr c,d
+  case 0x38:
+    z80_jr(cpu, z80_getflag(cpu, F_C));
+    break;
+
+  // add hl,sp
+  case 0x39: {
+    // splitting isn't necessary, but the add function doesn't take
+    // 16-bit args :/
+    byte lo = cpu->sp & 0xff;
+    byte hi = cpu->sp >> 8;
+    z80_add_16bit(cpu, &cpu->h, &cpu->l, &hi, &lo);
+    cpu->sp = z80_pair(hi, lo);
+  } break;
+
+  // ld a,(nn)
+  case 0x3a:
+    cpu->a = z80_read(cpu, z80_fetch16(cpu));
+    break;
+
+  // dec sp
+  case 0x3b:
+    cpu->sp--;
+    break;
+
+  // inc a
+  case 0x3c:
+    z80_inc_8bit(cpu, &cpu->a);
+    break;
+
+  // deca
+  case 0x3d:
+    z80_dec_8bit(cpu, &cpu->a);
+    break;
+
   // ld a,n
   case 0x3e:
     cpu->a = z80_fetch(cpu);
     break;
 
-  // ld (nn),a
-  case 0x32: {
-    z80_write(cpu, z80_fetch16(cpu), cpu->a);
-  } break;
+  // ccf
+  case 0x3f:
+    z80_flag(cpu, F_H, z80_getflag(cpu, F_C));
+    z80_flag(cpu, F_C, !z80_getflag(cpu, F_C));
+    z80_flag(cpu, F_N, 0);
+    break;
+
+  // ld b,b
+  case 0x40:
+    break;
+
+  // ld b,c
+  case 0x41:
+    cpu->b = cpu->c;
+    break;
+
+  // ld b,d
+  case 0x42:
+    cpu->b = cpu->d;
+    break;
+
+  // ld b,e
+  case 0x43:
+    cpu->b = cpu->e;
+    break;
+
+  // ld b,h
+  case 0x44:
+    cpu->b = cpu->h;
+    break;
+
+  // ld b,l
+  case 0x45:
+    cpu->b = cpu->l;
+    break;
+
+  // ld b,(hl)
+  case 0x46:
+    cpu->b = z80_read(cpu, HL(cpu));
+    break;
+
+  // ld b,a
+  case 0x47:
+    cpu->b = cpu->a;
+    break;
+
+  // ld c,b
+  case 0x48:
+    cpu->c = cpu->b;
+    break;
+
+  // ld c,c
+  case 0x49:
+    break;
+
+  // ld c,d
+  case 0x4a:
+    cpu->c = cpu->d;
+    break;
+
+  // ld c,e
+  case 0x4b:
+    cpu->c = cpu->e;
+    break;
+
+  // ld c,h
+  case 0x4c:
+    cpu->c = cpu->h;
+    break;
+
+  // ld c,l
+  case 0x4d:
+    cpu->c = cpu->l;
+    break;
+
+  // ld c,(hl)
+  case 0x4e:
+    cpu->c = z80_read(cpu, HL(cpu));
+    break;
+
+  // ld c,a
+  case 0x4f:
+    cpu->c = cpu->a;
+    break;
+
+  // ld d,b
+  case 0x50:
+    cpu->d = cpu->b;
+    break;
+
+  // ld d,c
+  case 0x51:
+    cpu->d = cpu->c;
+    break;
+
+  // ld d,d
+  case 0x52:
+    break;
+
+  // ld d,e
+  case 0x53:
+    cpu->d = cpu->e;
+    break;
+
+  // ld d,h
+  case 0x54:
+    cpu->d = cpu->h;
+    break;
+
+  // ld d,l
+  case 0x55:
+    cpu->d = cpu->l;
+    break;
+
+  // ld d,(hl)
+  case 0x56:
+    cpu->d = z80_read(cpu, HL(cpu));
+    break;
+
+  // ld b,a
+  case 0x57:
+    cpu->b = cpu->a;
+    break;
+
+  // ld c,b
+  case 0x58:
+    cpu->c = cpu->b;
+    break;
+
+  // ld c,c
+  case 0x59:
+    break;
+
+  // ld c,d
+  case 0x5a:
+    cpu->c = cpu->d;
+    break;
+
+  // ld c,e
+  case 0x5b:
+    cpu->c = cpu->e;
+    break;
+
+  // ld c,h
+  case 0x5c:
+    cpu->c = cpu->h;
+    break;
+
+  // ld c,l
+  case 0x5d:
+    cpu->c = cpu->l;
+    break;
+
+  // ld c,(hl)
+  case 0x5e:
+    cpu->c = z80_read(cpu, HL(cpu));
+    break;
+
+  // ld c,a
+  case 0x5f:
+    cpu->c = cpu->a;
+    break;
+
+  // ld h,b
+  case 0x60:
+    cpu->h = cpu->b;
+    break;
+
+  // ld h,c
+  case 0x61:
+    cpu->h = cpu->c;
+    break;
+
+  // ld h,d
+  case 0x62:
+    cpu->h = cpu->d;
+    break;
+
+  // ld h,e
+  case 0x63:
+    cpu->h = cpu->e;
+    break;
+
+  // ld h,h
+  case 0x64:
+    break;
+
+  // ld h,l
+  case 0x65:
+    cpu->h = cpu->l;
+    break;
+
+  // ld h,(hl)
+  case 0x66:
+    cpu->h = z80_read(cpu, HL(cpu));
+    break;
+
+  // ld h,a
+  case 0x67:
+    cpu->h = cpu->a;
+    break;
+
+  // ld l,b
+  case 0x68:
+    cpu->l = cpu->b;
+    break;
+
+  // ld l,c
+  case 0x69:
+    cpu->l = cpu->c;
+    break;
+
+  // ld l,d
+  case 0x6a:
+    cpu->l = cpu->d;
+    break;
+
+  // ld l,e
+  case 0x6b:
+    cpu->l = cpu->e;
+    break;
+
+  // ld l,h
+  case 0x6c:
+    cpu->l = cpu->h;
+    break;
+
+  // ld l,l
+  case 0x6d:
+    break;
+
+  // ld l,(hl)
+  case 0x6e:
+    cpu->l = z80_read(cpu, HL(cpu));
+    break;
+
+  // ld e,a
+  case 0x6f:
+    cpu->e = cpu->a;
+    break;
+
+  // ld (hl),b
+  case 0x70:
+    z80_write(cpu, HL(cpu), cpu->b);
+    break;
+
+  // ld (hl),c
+  case 0x71:
+    z80_write(cpu, HL(cpu), cpu->c);
+    break;
+
+  // ld (hl),d
+  case 0x72:
+    z80_write(cpu, HL(cpu), cpu->d);
+    break;
+
+  // ld (hl),e
+  case 0x73:
+    z80_write(cpu, HL(cpu), cpu->e);
+    break;
+
+  // ld (hl),h
+  case 0x74:
+    z80_write(cpu, HL(cpu), cpu->h);
+    break;
+
+  // ld (hl),l
+  case 0x75:
+    z80_write(cpu, HL(cpu), cpu->l);
+    break;
 
   // halt
   case 0x76:
     return false;
+
+  // ld (hl),a
+  case 0x77:
+    z80_write(cpu, HL(cpu), cpu->a);
+    break;
+
+  // ld a,b
+  case 0x78:
+    cpu->a = cpu->b;
+    break;
+
+  // ld a,c
+  case 0x79:
+    cpu->a = cpu->c;
+    break;
+
+  // ld a,d
+  case 0x7a:
+    cpu->a = cpu->d;
+    break;
+
+  // ld a,e
+  case 0x7b:
+    cpu->a = cpu->e;
+    break;
+
+  // ld a,h
+  case 0x7c:
+    cpu->a = cpu->h;
+    break;
+
+  // ld a,l
+  case 0x7d:
+    cpu->a = cpu->l;
+    break;
+
+  // ld a,(hl)
+  case 0x7e:
+    cpu->a = z80_read(cpu, HL(cpu));
+    break;
+
+  // ld a,a
+  case 0x7f:
+    break;
+
+  // add a,b
+  case 0x80:
+    z80_add_8bit(cpu, cpu->b);
+    break;
+
+  // add a,c
+  case 0x81:
+    z80_add_8bit(cpu, cpu->c);
+    break;
+
+  // add a,d
+  case 0x82:
+    z80_add_8bit(cpu, cpu->d);
+    break;
+
+  // add a,e
+  case 0x83:
+    z80_add_8bit(cpu, cpu->e);
+    break;
+
+  // add a,h
+  case 0x84:
+    z80_add_8bit(cpu, cpu->h);
+    break;
+
+  // add a,l
+  case 0x85:
+    z80_add_8bit(cpu, cpu->l);
+    break;
+
+  // add a,(hl)
+  case 0x86:
+    z80_add_8bit(cpu, z80_read(cpu, HL(cpu)));
+    break;
+
+  // add a,a
+  case 0x87:
+    z80_add_8bit(cpu, cpu->a);
+    break;
+
+  // adc a,b
+  case 0x88:
+    z80_adc_8bit(cpu, cpu->b);
+    break;
+
+  // adc a,c
+  case 0x89:
+    z80_adc_8bit(cpu, cpu->c);
+    break;
+
+  // adc a,d
+  case 0x8a:
+    z80_adc_8bit(cpu, cpu->d);
+    break;
+
+  // adc a,e
+  case 0x8b:
+    z80_adc_8bit(cpu, cpu->e);
+    break;
+
+  // adc a,h
+  case 0x8c:
+    z80_adc_8bit(cpu, cpu->h);
+    break;
+
+  // adc a,l
+  case 0x8d:
+    z80_adc_8bit(cpu, cpu->l);
+    break;
+
+  // adc a,(hl)
+  case 0x8e:
+    z80_adc_8bit(cpu, HL(cpu));
+    break;
+
+  // adc a,a
+  case 0x8f:
+    z80_adc_8bit(cpu, cpu->a);
     break;
 
   // or a

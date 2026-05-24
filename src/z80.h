@@ -22,6 +22,7 @@ typedef struct {
   void (*io_out)(word port, byte addr);
 
   word pc;
+  word sp;
 
   byte  a, f;
   byte  b, c;

@@ -1,5 +1,5 @@
 CC := clang
-CFLAGS := -g -Wall -Wextra -Werror
+CFLAGS := -g -Wall -Wextra -Werror -Wimplicit-fallthrough
 
 Z80ASM := vasmz80_oldstyle
 ASMFLAGS := 
