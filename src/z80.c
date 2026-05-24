@@ -160,21 +160,8 @@ static void z80_dec_indirect(z80_cpu *cpu, word addr) {
   z80_write(cpu, addr, val);
 }
 
-static void z80_add_8bit(z80_cpu *cpu, byte b) {
-  byte a = cpu->a;
-  byte r = a + b;
-  z80_flag(cpu, F_S, r >> 7);
-  z80_flag(cpu, F_Z, r == 0);
-  z80_flag(cpu, F_H, ((a & 0x0F) + (b& 0x0F)) > 0x0F);
-  z80_flag(cpu, F_PV, (~(a ^ b) & (a ^ r) & 0x80) != 0);
-  z80_flag(cpu, F_N, 0);
-  z80_flag(cpu, F_C, r < a);
-  cpu->a = r;
-}
-
-static void z80_adc_8bit(z80_cpu *cpu, byte b) {
+static void z80_add_8bit(z80_cpu *cpu, byte b, bool c) {
     byte a = cpu->a;
-    byte c = z80_getflag(cpu, F_C);
     byte r = a + b + c;
     z80_flag(cpu, F_S, (r & 0x80) != 0);
     z80_flag(cpu, F_Z, r == 0);
@@ -182,8 +169,39 @@ static void z80_adc_8bit(z80_cpu *cpu, byte b) {
     z80_flag(cpu, F_PV, (~(a ^ b) & (a ^ r) & 0x80) != 0);
     z80_flag(cpu, F_N, 0);
     z80_flag(cpu, F_C,
-        ((unsigned)a + (unsigned)b + (unsigned)c) > 0xFF);
+        (a + b + c) > 0xFF);
     cpu->a = r;
+}
+
+static void z80_adc_8bit(z80_cpu *cpu, byte b) {
+  z80_add_8bit(cpu, b, z80_getflag(cpu, F_C));
+}
+
+static void z80_sub_8bit(z80_cpu *cpu, byte b, bool borrow_in) {
+    byte a = cpu->a;
+    byte c = borrow_in ? 1 : 0;
+
+    byte r = a - b - c;
+
+    z80_flag(cpu, F_S, (r & 0x80) != 0);
+    z80_flag(cpu, F_Z, r == 0);
+
+    z80_flag(cpu, F_H,
+        (a & 0x0F) < ((b & 0x0F) + c));
+
+    z80_flag(cpu, F_PV,
+        ((a ^ b) & (a ^ r) & 0x80) != 0);
+
+    z80_flag(cpu, F_N, 1);
+
+    z80_flag(cpu, F_C,
+        a < (b + c));
+
+    cpu->a = r;
+}
+
+static void z80_sbc_8bit(z80_cpu *cpu, byte b) {
+    z80_sub_8bit(cpu, b, z80_getflag(cpu, F_C));
 }
 
 static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
@@ -862,42 +880,42 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // add a,b
   case 0x80:
-    z80_add_8bit(cpu, cpu->b);
+    z80_add_8bit(cpu, cpu->b, 0);
     break;
 
   // add a,c
   case 0x81:
-    z80_add_8bit(cpu, cpu->c);
+    z80_add_8bit(cpu, cpu->c, 0);
     break;
 
   // add a,d
   case 0x82:
-    z80_add_8bit(cpu, cpu->d);
+    z80_add_8bit(cpu, cpu->d, 0);
     break;
 
   // add a,e
   case 0x83:
-    z80_add_8bit(cpu, cpu->e);
+    z80_add_8bit(cpu, cpu->e, 0);
     break;
 
   // add a,h
   case 0x84:
-    z80_add_8bit(cpu, cpu->h);
+    z80_add_8bit(cpu, cpu->h, 0);
     break;
 
   // add a,l
   case 0x85:
-    z80_add_8bit(cpu, cpu->l);
+    z80_add_8bit(cpu, cpu->l, 0);
     break;
 
   // add a,(hl)
   case 0x86:
-    z80_add_8bit(cpu, z80_read(cpu, HL(cpu)));
+    z80_add_8bit(cpu, z80_read(cpu, HL(cpu)), 0);
     break;
 
   // add a,a
   case 0x87:
-    z80_add_8bit(cpu, cpu->a);
+    z80_add_8bit(cpu, cpu->a, 0);
     break;
 
   // adc a,b
@@ -938,6 +956,86 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   // adc a,a
   case 0x8f:
     z80_adc_8bit(cpu, cpu->a);
+    break;
+
+  // sub b
+  case 0x90:
+    z80_sub_8bit(cpu, cpu->b, 0);
+    break;
+
+  // sub c
+  case 0x91:
+    z80_sub_8bit(cpu, cpu->c, 0);
+    break;
+
+  // sub d
+  case 0x92:
+    z80_sub_8bit(cpu, cpu->d, 0);
+    break;
+
+  // sub e
+  case 0x93:
+    z80_sub_8bit(cpu, cpu->e, 0);
+    break;
+
+  // sub h
+  case 0x94:
+    z80_sub_8bit(cpu, cpu->h, 0);
+    break;
+
+  // sub l
+  case 0x95:
+    z80_sub_8bit(cpu, cpu->l, 0);
+    break;
+
+  // sub (hl)
+  case 0x96:
+    z80_sub_8bit(cpu, z80_read(cpu, HL(cpu)), 0);
+    break;
+
+  // sub a
+  case 0x97:
+    z80_sub_8bit(cpu, cpu->a, 0);
+    break;
+
+  // sbc a,b
+  case 0x98:
+    z80_sbc_8bit(cpu, cpu->b);
+    break;
+
+  // sbc a,c
+  case 0x99:
+    z80_sbc_8bit(cpu, cpu->c);
+    break;
+
+  // sbc a,d
+  case 0x9a:
+    z80_sbc_8bit(cpu, cpu->d);
+    break;
+
+  // sbc a,e
+  case 0x9b:
+    z80_sbc_8bit(cpu, cpu->e);
+    break;
+
+  // sbc a,h
+  case 0x9c:
+    z80_sbc_8bit(cpu, cpu->h);
+    break;
+
+  // sbc a,l
+  case 0x9d:
+    z80_sbc_8bit(cpu, cpu->l);
+    break;
+
+  // sbc a,(hl)
+  case 0x9e:
+    z80_sbc_8bit(cpu, z80_read(cpu, HL(cpu));
+    break;
+
+  // sbc a,a
+  case 0x9f:
+    z80_sbc_8bit(cpu, cpu->a);
     break;
 
   // or a
