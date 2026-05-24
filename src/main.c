@@ -7,10 +7,15 @@
 #include "serial.h"
 #include "z80.h"
 #include "ram.h"
+#include "rom.h"
+
+#define RAM 1
+#define BLOCK_DEV 2
+#define ROM 3
 
 struct termios old_termios;
 
-void initialise_terminal() {
+static void initialise_terminal() {
   struct termios raw;
 
   tcgetattr(STDIN_FILENO, &old_termios);
@@ -21,8 +26,59 @@ void initialise_terminal() {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-void restore_terminal() {
+static void restore_terminal() {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &old_termios);
+}
+
+static void start_ozm(z80_cpu *cpu) {
+  if (DEBUG)
+    printf("\033[2J");
+
+  while (1) {
+    if (DEBUG)
+      printf("\033[H\033[2K");
+
+    z80_instr instr = z80_decode(cpu);
+    if (!z80_execute(cpu, &instr)) break;
+
+    if (DEBUG) {
+      printf("\n");
+      for (int i = 0; i <= 0xf; i++) {
+        printf("%02x ", z80_read(cpu, 0xe000 + i));
+      }
+      printf("\n");
+      for (int i = 0; i <= 0xf; i++) {
+        printf("%s ", 0xbff0 + i == cpu->sp ? "^^" : "  ");
+      }
+      printf("\n");
+
+      z80_debug_print(cpu);
+      usleep(100000);
+    }
+  }
+}
+
+static void setup_serial(z80_cpu *cpu) {
+  cpu->io_in = serial_in;
+  cpu->io_out = serial_out;
+}
+
+static void setup_ram(z80_cpu *cpu) {
+  z80_device *device = &cpu->devices[RAM];
+  ram_create(device);
+}
+
+static void setup_rom(z80_cpu *cpu) {
+  z80_device *device = &cpu->devices[ROM];
+  rom_create(device, "build/rom.bin", 0xe000, 0x2000);
+}
+
+static void map_memory(z80_cpu *cpu) {
+  for (int i = 0; i <= 0xffff; i++) {
+    if (i >= 0x0000 && i <= 0xbfff) cpu->mem_map[i] = RAM;
+    if (i >= 0xc000 && i <= 0xc0ff) cpu->mem_map[i] = BLOCK_DEV;
+    if (i >= 0xe000 && i <= 0xffff) cpu->mem_map[i] = ROM;
+  }
 }
 
 int main() {
@@ -30,32 +86,14 @@ int main() {
   atexit(restore_terminal);
 
   z80_cpu cpu = {0};
+  setup_serial(&cpu);
+  setup_ram(&cpu);
+  setup_rom(&cpu);
+  map_memory(&cpu);
 
-  cpu.io_in = serial_in;
-  cpu.io_out = serial_out;
+  cpu.pc = 0xe000;
 
-  const uint8_t RAM = 0;
-  z80_device *ram = &cpu.devices[RAM];
-  ram_create(ram);
-  // cpu is zero initialised, so all addresses point to device 0
-  // by default
-
-  FILE *f = fopen("build/ram.bin", "rb");
-  if (!f) {
-    perror("ozm");
-    return 1;
-  }
-  if (ram_load_image(ram, f) < 0) {
-    fprintf(stderr, "ozm: failed to load ram image");
-    return 1;
-  }
-
-  fclose(f);
-  
-  while (1) {
-    z80_instr instr = z80_decode(&cpu);
-    if (!z80_execute(&cpu, &instr)) break;
-  }
-
+  start_ozm(&cpu);
+ 
   return 0;
 }

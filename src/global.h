@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define DEBUG false
+
 typedef uint8_t byte;
 typedef uint16_t word;
 

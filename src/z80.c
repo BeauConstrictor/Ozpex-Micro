@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <stdio.h>
 
 #include "z80.h"
@@ -11,8 +12,13 @@
 
 #define HL(cpu) ( z80_pair(cpu->h, cpu->l) )
 
+// NOTE:
+// throughout this code, the bool type is used to represent a bit,
+// where i don't explicitly do a x == 0 ? 0 : 1, as bools implicitly
+// do this conversion automatically.
+
 static word z80_pair(byte hi, byte lo) {
-  return (hi << 8) | lo;
+  return ((word)hi << 8) | lo;
 }
 
 static void z80_error(char *s) {
@@ -20,14 +26,14 @@ static void z80_error(char *s) {
   exit(1);
 }
 
-static byte z80_read(z80_cpu *cpu, word addr) {
+byte z80_read(z80_cpu *cpu, word addr) {
   uint8_t dev_id = cpu->mem_map[addr];
   z80_device *dev = &cpu->devices[dev_id];
   if (!dev->read) z80_error("unmapped memory area accessed");
   return dev->read(dev->state, addr);
 }
 
-static void z80_write(z80_cpu *cpu, word addr, byte data) {
+void z80_write(z80_cpu *cpu, word addr, byte data) {
   uint8_t dev_id = cpu->mem_map[addr];
   z80_device *dev = &cpu->devices[dev_id];
   if (!dev->write) z80_error("unmapped memory area accessed");
@@ -69,21 +75,25 @@ bool z80_parity(uint8_t x) {
 }
 
 static void z80_inc_8bit(z80_cpu *cpu, uint8_t *val) {
-  z80_flag(cpu, F_H, (*val & 0x0f) == 0x0f);
-  z80_flag(cpu, F_PV, *val == 0x7f);
-  (*val)++;
-  z80_flag(cpu, F_N, 0);
-  z80_flag(cpu, F_Z, *val == 0x00);
-  z80_flag(cpu, F_S, *val & (1 << 7));
+    uint8_t old = *val;
+    uint8_t res = old + 1;
+    z80_flag(cpu, F_H, (old & 0x0F) == 0x0F);
+    z80_flag(cpu, F_PV, old == 0x7F);
+    z80_flag(cpu, F_N, 0);
+    z80_flag(cpu, F_Z, res == 0x00);
+    z80_flag(cpu, F_S, res & 0x80);
+    *val = res;
 }
 
-static void z80_dec_8bit(z80_cpu *cpu, byte *val) {
-  (*val)--;
-  z80_flag(cpu, F_PV, *val == 0x7f);
-  z80_flag(cpu, F_H, (*val & 0x0f) == 0x0f);
-  z80_flag(cpu, F_N, 1);
-  z80_flag(cpu, F_Z, *val == 0);
-  z80_flag(cpu, F_S, *val & (1 << 7));
+static void z80_dec_8bit(z80_cpu *cpu, uint8_t *val) {
+    uint8_t old = *val;
+    uint8_t res = old - 1;
+    z80_flag(cpu, F_H, (old & 0x0F) == 0x00);
+    z80_flag(cpu, F_PV, old == 0x80);
+    z80_flag(cpu, F_N, 1);
+    z80_flag(cpu, F_Z, res == 0x00);
+    z80_flag(cpu, F_S, res & 0x80);
+    *val = res;
 }
 
 static void z80_rlcx(z80_cpu *cpu, byte *val) {
@@ -112,7 +122,7 @@ static void z80_add_16bit(z80_cpu *cpu, byte *ah, byte *al, byte *bh,
 
   z80_flag(cpu, F_C, result > 0xffff);
   z80_flag(cpu, F_N, 0);
-  z80_flag(cpu, F_H, ((a ^ b ^ result) & 0x1000));
+  z80_flag(cpu, F_H, ((a & 0x0FFF) + (b & 0x0FFF)) > 0x0FFF);
 
   *ah = (result >> 8) & 0xff;
   *al = result & 0xff;
@@ -135,7 +145,7 @@ static void z80_or(z80_cpu *cpu, byte val) {
   z80_flag(cpu, F_S,  cpu->a >> 7);
 }
 
-static byte z80_sub(z80_cpu *cpu, byte val) {
+static byte z80_cp(z80_cpu *cpu, byte val) {
   byte result = cpu->a - val;
 
   z80_flag(cpu, F_C,  cpu->a < val);
@@ -161,16 +171,16 @@ static void z80_dec_indirect(z80_cpu *cpu, word addr) {
 }
 
 static void z80_add_8bit(z80_cpu *cpu, byte b, bool c) {
-    byte a = cpu->a;
-    byte r = a + b + c;
-    z80_flag(cpu, F_S, (r & 0x80) != 0);
-    z80_flag(cpu, F_Z, r == 0);
-    z80_flag(cpu, F_H, ((a & 0x0F) + (b & 0x0F) + c) > 0x0F);
-    z80_flag(cpu, F_PV, (~(a ^ b) & (a ^ r) & 0x80) != 0);
-    z80_flag(cpu, F_N, 0);
-    z80_flag(cpu, F_C,
-        (a + b + c) > 0xFF);
-    cpu->a = r;
+  byte a = cpu->a;
+  byte r = a + b + c;
+  z80_flag(cpu, F_S, (r & 0x80) != 0);
+  z80_flag(cpu, F_Z, r == 0);
+  z80_flag(cpu, F_H, ((a & 0x0F) + (b & 0x0F) + c) > 0x0F);
+  z80_flag(cpu, F_PV, (~(a ^ b) & (a ^ r) & 0x80) != 0);
+  z80_flag(cpu, F_N, 0);
+  z80_flag(cpu, F_C,
+      (a + b + c) > 0xFF);
+  cpu->a = r;
 }
 
 static void z80_adc_8bit(z80_cpu *cpu, byte b) {
@@ -178,30 +188,49 @@ static void z80_adc_8bit(z80_cpu *cpu, byte b) {
 }
 
 static void z80_sub_8bit(z80_cpu *cpu, byte b, bool borrow_in) {
-    byte a = cpu->a;
-    byte c = borrow_in ? 1 : 0;
+  byte a = cpu->a;
+  byte c = borrow_in ? 1 : 0;
 
-    byte r = a - b - c;
+  byte r = a - b - c;
 
-    z80_flag(cpu, F_S, (r & 0x80) != 0);
-    z80_flag(cpu, F_Z, r == 0);
+  z80_flag(cpu, F_S, (r & 0x80) != 0);
+  z80_flag(cpu, F_Z, r == 0);
 
-    z80_flag(cpu, F_H,
-        (a & 0x0F) < ((b & 0x0F) + c));
+  z80_flag(cpu, F_H,
+      (a & 0x0F) < ((b & 0x0F) + c));
 
-    z80_flag(cpu, F_PV,
-        ((a ^ b) & (a ^ r) & 0x80) != 0);
+  z80_flag(cpu, F_PV,
+      ((a ^ b) & (a ^ r) & 0x80) != 0);
 
-    z80_flag(cpu, F_N, 1);
+  z80_flag(cpu, F_N, 1);
 
-    z80_flag(cpu, F_C,
-        a < (b + c));
+  z80_flag(cpu, F_C,
+      a < (b + c));
 
-    cpu->a = r;
+  cpu->a = r;
 }
 
 static void z80_sbc_8bit(z80_cpu *cpu, byte b) {
-    z80_sub_8bit(cpu, b, z80_getflag(cpu, F_C));
+  z80_sub_8bit(cpu, b, z80_getflag(cpu, F_C));
+}
+
+static void z80_push(z80_cpu *cpu, byte val) {
+  z80_write(cpu, --cpu->sp, val);
+}
+
+static void z80_push16(z80_cpu *cpu, word val) {
+  z80_push(cpu, val >> 8);
+  z80_push(cpu, val & 0xff);
+}
+
+static byte z80_pop(z80_cpu *cpu) {
+  return z80_read(cpu, cpu->sp++);
+}
+
+static word z80_pop16(z80_cpu *cpu) {
+  byte lo = z80_pop(cpu);
+  byte hi = z80_pop(cpu);
+  return z80_pair(hi, lo);
 }
 
 static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
@@ -950,7 +979,7 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // adc a,(hl)
   case 0x8e:
-    z80_adc_8bit(cpu, HL(cpu));
+    z80_adc_8bit(cpu, z80_read(cpu, HL(cpu)));
     break;
 
   // adc a,a
@@ -1030,7 +1059,7 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // sbc a,(hl)
   case 0x9e:
-    z80_sbc_8bit(cpu, z80_read(cpu, HL(cpu));
+    z80_sbc_8bit(cpu, z80_read(cpu, HL(cpu)));
     break;
 
   // sbc a,a
@@ -1042,6 +1071,23 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   case 0xb7:
     z80_or(cpu, cpu->a);
     break;
+
+  // ret z
+  case 0xc8:
+    if (z80_getflag(cpu, F_Z)) cpu->pc = z80_pop16(cpu);
+    break;
+
+  // ret
+  case 0xc9:
+    cpu->pc = z80_pop16(cpu);
+    break;
+
+  // call nn
+  case 0xcd: {
+    word addr = z80_fetch16(cpu);
+    z80_push16(cpu, cpu->pc);
+    cpu->pc = addr;
+  } break;
 
   // out (n),a
   case 0xd3:
@@ -1060,7 +1106,7 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // cp n
   case 0xfe:
-    z80_sub(cpu, z80_fetch(cpu));
+    z80_cp(cpu, z80_fetch(cpu));
     break;
 
   default:
@@ -1125,6 +1171,7 @@ void z80_debug_print_flags(z80_cpu *cpu) {
 
 void z80_debug_print(z80_cpu *cpu) {
   printf("pc: %04xh\n", cpu->pc);
+  printf("sp: %04xh\n", cpu->sp);
   printf("\n");
   z80_debug_print_flags(cpu);
   printf("\n");

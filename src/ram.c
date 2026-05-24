@@ -1,3 +1,4 @@
+#include <string.h>
 #include <stdio.h>
 
 #include "global.h"
@@ -30,6 +31,7 @@ ssize_t ram_load_image(z80_device *ram, FILE *f) {
 
 void ram_create(z80_device *ram) {
   ram->state = malloc(65536);
+  memset(ram->state, 0xff, 65536);
   ram->read = ram_read;
   ram->write = ram_write;
 }

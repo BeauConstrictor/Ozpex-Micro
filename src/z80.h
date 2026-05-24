@@ -43,6 +43,9 @@ typedef struct {
   int opcode;            // mandatory
 } z80_instr;
 
+byte z80_read(z80_cpu *cpu, word addr);
+void z80_write(z80_cpu *cpu, word addr, byte val);
+
 z80_instr z80_decode(z80_cpu *cpu);
 bool z80_execute(z80_cpu *cpu, z80_instr *instr);
 void z80_debug_print(z80_cpu *cpu);
