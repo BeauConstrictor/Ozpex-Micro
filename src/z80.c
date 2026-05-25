@@ -233,6 +233,17 @@ static word z80_pop16(z80_cpu *cpu) {
   return z80_pair(hi, lo);
 }
 
+static void z80_and(z80_cpu *cpu, byte val) {
+  byte r = cpu->a & val;
+  z80_flag(cpu, F_C, 0);
+  z80_flag(cpu, F_N, 0);
+  z80_flag(cpu, F_H, 1);
+  z80_flag(cpu, F_PV, z80_parity(r));
+  z80_flag(cpu, F_Z, r == 0);
+  z80_flag(cpu, F_S, r >> 7);
+  cpu->a = r;
+}
+
 static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   (void)cpu;
 
@@ -254,8 +265,7 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // inc bc
   case 0x03:
-    if (++cpu->c == 0)
-      cpu->b++;
+    if (++cpu->c == 0) cpu->b++;
     break;
 
   // inc b
@@ -707,48 +717,48 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     cpu->d = z80_read(cpu, HL(cpu));
     break;
 
-  // ld b,a
+  // ld e,a
   case 0x57:
-    cpu->b = cpu->a;
+    cpu->e = cpu->a;
     break;
 
-  // ld c,b
+  // ld e,b
   case 0x58:
-    cpu->c = cpu->b;
+    cpu->e = cpu->b;
     break;
 
-  // ld c,c
+  // ld e,c
   case 0x59:
+    cpu->e = cpu->c;
     break;
 
-  // ld c,d
+  // ld e,d
   case 0x5a:
-    cpu->c = cpu->d;
+    cpu->e = cpu->d;
     break;
 
-  // ld c,e
+  // ld e,e
   case 0x5b:
-    cpu->c = cpu->e;
     break;
 
-  // ld c,h
+  // ld e,h
   case 0x5c:
-    cpu->c = cpu->h;
+    cpu->e = cpu->h;
     break;
 
-  // ld c,l
+  // ld e,l
   case 0x5d:
-    cpu->c = cpu->l;
+    cpu->e = cpu->l;
     break;
 
-  // ld c,(hl)
+  // ld e,(hl)
   case 0x5e:
-    cpu->c = z80_read(cpu, HL(cpu));
+    cpu->e = z80_read(cpu, HL(cpu));
     break;
 
-  // ld c,a
+  // ld e,a
   case 0x5f:
-    cpu->c = cpu->a;
+    cpu->e = cpu->a;
     break;
 
   // ld h,b
@@ -824,9 +834,9 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     cpu->l = z80_read(cpu, HL(cpu));
     break;
 
-  // ld e,a
+  // ld l,a
   case 0x6f:
-    cpu->e = cpu->a;
+    cpu->l = cpu->a;
     break;
 
   // ld (hl),b
@@ -1067,9 +1077,34 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_sbc_8bit(cpu, cpu->a);
     break;
 
+  // or b
+  case 0xb0:
+    z80_or(cpu, cpu->b);
+    break;
+
   // or a
   case 0xb7:
     z80_or(cpu, cpu->a);
+    break;
+
+  // cp h
+  case 0xbc:
+    z80_cp(cpu, cpu->h);
+    break;
+
+  // cp l
+  case 0xbd:
+    z80_cp(cpu, cpu->l);
+    break;
+
+  // jp nn
+  case 0xc3: {
+    cpu->pc = z80_fetch16(cpu);
+  } break;
+
+  // add a,n
+  case 0xc6:
+    z80_add_8bit(cpu, z80_fetch(cpu), 0);
     break;
 
   // ret z
@@ -1094,23 +1129,36 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     cpu->io_out(z80_pair(cpu->a, z80_fetch(cpu)), cpu->a);
     break;
 
+  // sub n
+  case 0xd6:
+    z80_sub_8bit(cpu, z80_fetch(cpu), 0);
+    break;
+
   // in a,(n)
   case 0xdb:
     cpu->a = cpu->io_in(z80_pair(cpu->a, z80_fetch(cpu)));
     break;
 
-  // jp nn
-  case 0xc3: {
-    cpu->pc = z80_fetch16(cpu);
-  } break;
+  // and n
+  case 0xe6:
+    z80_and(cpu, z80_fetch(cpu));
+    break;
+
+  // jp (hl)
+  case 0xe9:
+    cpu->pc = HL(cpu);
+    break;
 
   // cp n
   case 0xfe:
     z80_cp(cpu, z80_fetch(cpu));
     break;
 
-  default:
-    z80_error("unsupported instruction");
+  default: {
+    char err[128];
+    snprintf(err, sizeof(err), "unsupported opcode: %02x", opcode);
+    z80_error(err);
+  }
   }
 
   return true;
@@ -1148,7 +1196,7 @@ bool z80_execute(z80_cpu *cpu, z80_instr *instr) {
   if (instr->prefix_len == 0) {
     return z80_execute_main(cpu, instr->opcode);
   } else {
-    z80_error("unsupported instruction");
+    z80_error("unsupported prefixed instruction");
     return false;
   }
 }
