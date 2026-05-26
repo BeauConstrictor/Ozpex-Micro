@@ -24,7 +24,7 @@ program that is still vary early in development, and your mileage may
 vary.
 
 With that said, to try out the emulator, make sure you have `clang`
-installed and [`vasmz80_oldstyle`](https://compilers.de/vasm) in your
+installed and [`vasmz80_oldstyle`](http://www.compilers.de/vasm) in your
 `PATH`. Then, just use
 
 ```
