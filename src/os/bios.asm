@@ -50,37 +50,49 @@ mainloop:
   call readl
   call execl
   jr   mainloop
-  halt
 
 ; buffer a line of input, terminated by \0, not \n
 readl:
   ld   hl,inputl
 .loop:
   in   a,(SERIAL)
+  ; check if no key pressed...
   cp   0
+  ; if so, check again
   jr   z,.loop
   cp   '\n'
   jr   z,.done
   cp   DELETE
   jr   z,.backspace
+  ; write the char to the end of the buffer
   ld   (hl),a
+  ; move to the next spot in the buffer
   inc  hl
+  ; echo the char
   out  (SERIAL),a
+  ; repeat
   jr   .loop
 .backspace:
+  ; load the start of the bufferr
   ld   de,inputl
+  ; check if we're already at it
   sbc  hl,de
+  ; if so, ignore backspace
   jr   z,.loop
+  ; move cursor back,
   ld   a,'\b'
   out  (SERIAL),a
+  ; replace prev char with space (moves forward),
   ld   a,' '
   out  (SERIAL),a
+  ; and go back again
   ld   a,'\b'
   out  (SERIAL),a
   dec  hl
   jr   .loop
 .done:
   out  (SERIAL),a
+  ; mark eol with a null char
   ld   (hl),'\0'
   ret
 
@@ -93,21 +105,29 @@ prompt:
   ld   hl,post_prompt
   jp   print
 
+; output the hex byte in a
 hex_out:
+  ; save full byte into a
   ld   b,a
+  ; extract high nibble
   rrca
   rrca
   rrca
   rrca
   and  $0f
+  ; print it
   call .nibble
+  ; extract low nibble
   ld   a,b
   and  $0f
+  ; print it
   call .nibble
   ret
 .nibble:
+  ; if nibble < 10, print it's digit
   cp   10
   jr   c,.digit
+  ; otherwise, print it's letter
   add  a,'A'-10
   out  (SERIAL),a
   ret
@@ -116,6 +136,7 @@ hex_out:
   out  (SERIAL),a
   ret
 
+; print the hex word in hl
 hex_word_out:
   ld   a,h
   call hex_out
@@ -123,6 +144,8 @@ hex_word_out:
   call hex_out
   ret
 
+; read a single char from the input buffer and advance to the next
+; char (skips whitespace) (returns in a)
 char_from_inputl:
   ld   hl,(parse)
   ld   a,(hl)
@@ -132,6 +155,7 @@ char_from_inputl:
   jr   z,char_from_inputl
   ret
 
+; undo previous call to char_from_inputl
 unget_char:
   ld   hl,(parse)
   dec  hl
@@ -141,22 +165,33 @@ unget_char:
   ld   (parse),hl
   ret
 
+; read in a hex byte from input buffer (returns in a) (produces
+; garbage for invalid hex)
 hex_in:
+  ; read a single hex char
   call .nibble
+  ; move it to high nibble spot
   rlca
   rlca
   rlca
   rlca
+  ; save it for now
   ld   b,a
+  ; read another char
   call .nibble
+  ; it is in the low nibble spot. now or back in the high nibble we
+  ; just saved
   or   b
   ret
 .nibble:
   call char_from_inputl
+  ; if less than 'A' in ascii code, must be a digit
   cp   'A'
   jr   c,.digit
+  ; if less than 'a' in ascii code, must be an uppercase char
   cp   'a'
   jr   c,.uppercase
+  ; otherwise, it must be lowercase
   sub  'a'-10
   ret 
 .uppercase:
@@ -166,6 +201,7 @@ hex_in:
   sub  '0'
   ret
 
+; read a 16-byte hex value into hl
 hex_word_in:
   call hex_in
   ld   e,a
@@ -174,9 +210,12 @@ hex_word_in:
   ld   l,a
   ret
 
+; run a full command from the input buffer
 execl:
   ld   hl,inputl
   ld   (parse),hl
+; some commands allow more commands directly after them. they jump
+; back here
 .dispatch:
   call char_from_inputl
   cp   '\0'
@@ -189,17 +228,23 @@ execl:
   jr   z,.jump
   cp   '.'
   jr   z,.echo
+  ; if not a command char, undo that read and read as hex.
   call unget_char
   call hex_in
   ld   d,a
   call char_from_inputl
+  ; if comma or eol, write the byte to addr
   cp   ','
   jp   z,.write
   ld   b,a
+  ; we have to preserve the null char for the subsequent .dispatch
+  ; jump.
   call unget_char
   ld   a,b
   cp   '\0'
   jp   z,.write
+  ; if not, read another hex byte and treat it as a full address to
+  ; move to
   call hex_in
   ld   e,a
   ld   (addr),de
@@ -218,6 +263,8 @@ execl:
 .jump:
   ld   hl,(addr)
   jp   hl
+  ; when the user code returns, it will return on behalf of the execl
+  ; function (basically tail call optimisation)
 .echo:
   call char_from_inputl
   cp   '\0'
@@ -268,10 +315,13 @@ execl:
 .range_echo_loop:
   call print_hexdump_line
   ; check if we have gone past our final address
+  ; (we have to preserve hl as it contains where we have already
+  ;  printed to)
   push hl
   or   a
   sbc  hl,de
   pop  hl
+  ; if we haven't, keep printing until we have
   jr   c,.range_echo_loop
   jr   z,.range_echo_loop
   ret
@@ -283,7 +333,7 @@ execl:
   jp   .dispatch
   ret
 
-; print a line of a canonical hexdump starting at hl
+; print a line of an almost-canonical hexdump starting at hl|$fff0
 print_hexdump_line:
   push hl
   ld   hl,hexdump_addr
