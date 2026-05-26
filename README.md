@@ -9,7 +9,7 @@ A fictional 8-bit retro microcomputer built for tkinkerers.
 The Ozpex Micro is another architecture + emulator in my Ozpex* family
 of fantasy retro computers, alongside the 64 and 128. What makes this
 design unique is it's CPU: the Z80. The Z80 has a more rich instruction
-set than the 6502, making it much more satisfying to program in.
+set than the 6502, making it much more fun to write assembly for.
 
 The Ozpex Micro's new CPU also brings a new emulator along with it,
 offering vastly improved performance through C.
