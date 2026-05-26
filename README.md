@@ -4,6 +4,8 @@ A fictional 8-bit retro microcomputer built for tkinkerers.
 
 <img src="https://camo.githubusercontent.com/31851fc9832608d26da2ea969140dd35c9f0c29a4c802b279dd83b4db67d2801/68747470733a2f2f696d672e736869656c64732e696f2f6769746875622f6c6963656e73652f42656175436f6e7374726963746f722f6f7a7065782d36343f7374796c653d666c6174" alt="GNU GPL v2.0 License"/>
 
+![A screenshot of a program typed into the hex monitor](assets/screenshot.png)
+
 The Ozpex Micro is another architecture + emulator in my Ozpex* family
 of fantasy retro computers, alongside the 64 and 128. What makes this
 design unique is it's CPU: the Z80. The Z80 has a more rich instruction

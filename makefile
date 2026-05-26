@@ -39,3 +39,7 @@ run: all
 .PHONY: dbg
 dbg: all
 	gdb build/ozm
+
+.PHONY: clean
+clean:
+	rm -rf build/
