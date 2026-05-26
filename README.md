@@ -25,10 +25,10 @@ vary.
 
 With that said, to try out the emulator, make sure you have `clang`
 installed and [`vasmz80_oldstyle`](http://www.compilers.de/vasm) in your
-`PATH`. Then, just use
+`PATH`. Then, just use...
 
 ```
 $ make run
 ```
 
-To start the emulator with the ROM monitor loaded.
+...to start the emulator with the ROM monitor loaded.
