@@ -1294,8 +1294,8 @@ void z80_debug_print_flags(z80_cpu *cpu) {
 }
 
 void z80_debug_print(z80_cpu *cpu) {
-  printf("pc: %04xh\n", cpu->pc);
-  printf("sp: %04xh\n", cpu->sp);
+  printf("pc: %04x\n", cpu->pc);
+  printf("sp: %04x\n", cpu->sp);
   printf("\n");
   z80_debug_print_flags(cpu);
   printf("\n");

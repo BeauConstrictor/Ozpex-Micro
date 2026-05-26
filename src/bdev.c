@@ -55,18 +55,14 @@ static void bdev_sectd_write(bdev_sectd *dev, byte addr, byte val) {
 }
 
 static void bdev_sectd_flush(bdev_sectd *dev, byte sector) {
-  (void)dev;
-  (void)sector;
-
-  // seek file to file[sector*256]
-  // write buffer into it
+  fseek(dev->image, 0x100 * sector, SEEK_SET);
+  fwrite(dev->buffer, 1, 0x100, dev->image);
+  fflush(dev->image);
 }
 
-static void bdev_sectd_setsect(bdev_sectd *dev, byte old, byte new) {
-  (void)dev;
-  (void)old;
-  (void)new;
-  // write into buffer file[new];
+static void bdev_sectd_setsect(bdev_sectd *dev, byte new) {
+  fseek(dev->image, 0x100 * new, SEEK_SET);
+  fread(dev->buffer, 1, 0x100, dev->image);
 }
 
 static byte bdev_xmem_read(bdev_xmem *dev, byte addr) {
@@ -77,8 +73,7 @@ static void bdev_xmem_write(bdev_xmem *dev, byte addr, byte val) {
   dev->memory[(dev->sector << 8) | addr] = val;
 }
 
-static void bdev_xmem_setsect(bdev_xmem *dev, byte old, byte new) {
-  (void)old;
+static void bdev_xmem_setsect(bdev_xmem *dev, byte new) {
   dev->sector = new;
 }
 
@@ -98,17 +93,23 @@ static void bdev_flush(bdev_dev *dev, byte sector) {
 static void bdev_setsect(bdev_devs *devs, bdev_dev *dev, byte new) {
   bdev_flush(dev, devs->sector);
 
+  // allows a manual flush by switching to the sector your already
+  // in
+  if (devs->sector == new)
+    return;
+
   switch (dev->kind) {
   case bdev_t_nodev:
     bdev_error("attempt to manipulate a slot with no connected device");
     break;
   case bdev_t_sectd:
-    bdev_sectd_setsect(&dev->ss, devs->sector, new);
+    bdev_sectd_setsect(&dev->ss, new);
     break;
   case bdev_t_xmem:
-    bdev_xmem_setsect(&dev->xm, devs->sector, new);
+    bdev_xmem_setsect(&dev->xm, new);
     break;
   }
+
   devs->sector = new;
 }
 
@@ -169,7 +170,7 @@ static void bdev_write(void *state, word addr, byte val) {
   }
 
   if (addr == devs->dev_s) {
-    bdev_setsect(devs, dev, devs->sector); // flush sector
+    bdev_flush(dev, devs->sector);
     devs->selected = val;
     dev = devs->devices[val];
     if (dev == NULL) {
@@ -220,6 +221,12 @@ void bdev_install(bdev_devs *devs, byte slot, bdev_dev *dev) {
 }
 
 bdev_dev *bdev_create_sectd(bool bootable, FILE *f) {
+  long size;
+  fseek(f, 0, SEEK_END);
+  size = ftell(f);
+  rewind(f);
+  if (size != 0x10000) return NULL;
+
   bdev_dev *dev = malloc(sizeof(bdev_dev));
 
   dev->kind = bdev_t_sectd;
@@ -237,6 +244,8 @@ bdev_dev *bdev_create_xmem() {
   dev->kind = bdev_t_xmem;
   dev->bootable = false;
   dev->xm.sector = 0;
+
+  memset(&dev->xm.memory, 0xel, sizeof(dev->xm.memory));
 
   return dev;
 }
