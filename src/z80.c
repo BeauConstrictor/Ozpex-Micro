@@ -11,6 +11,7 @@
 #define F_C  0
 
 #define HL(cpu) ( z80_pair(cpu->h, cpu->l) )
+#define DE(cpu) ( z80_pair(cpu->d, cpu->e) )
 
 // NOTE:
 // throughout this code, the bool type is used to represent a bit,
@@ -134,6 +135,11 @@ static void z80_jr(z80_cpu *cpu, bool condition) {
   cpu->pc += offset;
 }
 
+static void z80_jp(z80_cpu *cpu, word addr, bool condition) {
+  if (!condition) return;
+  cpu->pc = addr;
+}
+
 static void z80_or(z80_cpu *cpu, byte val) {
   cpu->a |= val;
 
@@ -242,6 +248,34 @@ static void z80_and(z80_cpu *cpu, byte val) {
   z80_flag(cpu, F_Z, r == 0);
   z80_flag(cpu, F_S, r >> 7);
   cpu->a = r;
+}
+
+static void z80_sub_16bit(z80_cpu *cpu, word b, bool borrow_in) {
+  word a = HL(cpu);
+  word c = borrow_in ? 1 : 0;
+
+  word r = a - b - c;
+
+  z80_flag(cpu, F_S, (r & 0x8000) != 0);
+  z80_flag(cpu, F_Z, r == 0);
+
+  z80_flag(cpu, F_H,
+      (a & 0x0FFF) < ((b & 0x0FFF) + c));
+
+  z80_flag(cpu, F_PV,
+      ((a ^ b) & (a ^ r) & 0x8000) != 0);
+
+  z80_flag(cpu, F_N, 1);
+
+  z80_flag(cpu, F_C,
+      a < (b + c));
+
+  cpu->h = r >> 8;
+  cpu->l = r & 0xff;
+}
+
+static void z80_sbc_16bit(z80_cpu *cpu, word b) {
+  z80_sub_16bit(cpu, b, z80_getflag(cpu, F_C));
 }
 
 static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
@@ -1099,7 +1133,7 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // jp nn
   case 0xc3: {
-    cpu->pc = z80_fetch16(cpu);
+    z80_jp(cpu, z80_fetch16(cpu), true);
   } break;
 
   // add a,n
@@ -1139,6 +1173,23 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     cpu->a = cpu->io_in(z80_pair(cpu->a, z80_fetch(cpu)));
     break;
 
+  // jp z,nn
+  case 0xca:
+    z80_jp(cpu, z80_fetch16(cpu), z80_getflag(cpu, F_Z));
+    break;
+
+  // pop hl
+  case 0xe1: {
+    word hl = z80_pop16(cpu);
+    cpu->h  = hl >> 8;
+    cpu->l  = hl & 0xff;
+  } break;
+
+  // push hl
+  case 0xe5:
+    z80_push16(cpu, HL(cpu));
+    break;
+
   // and n
   case 0xe6:
     z80_and(cpu, z80_fetch(cpu));
@@ -1146,7 +1197,7 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // jp (hl)
   case 0xe9:
-    cpu->pc = HL(cpu);
+    z80_jp(cpu, HL(cpu), true);
     break;
 
   // cp n
@@ -1166,10 +1217,16 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
 bool z80_execute_misc(z80_cpu *cpu, byte opcode) {
   switch (opcode) {
+  // ld (nn),de
   case 0x53: {
     word addr = z80_fetch16(cpu);
     z80_write(cpu, addr,   cpu->e);
     z80_write(cpu, addr+1, cpu->d);
+  } break;
+
+  // sbc hl,de
+  case 0x52: {
+    z80_sbc_16bit(cpu, DE(cpu));
   } break;
 
   default: {

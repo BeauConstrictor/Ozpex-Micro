@@ -10,27 +10,24 @@
 ; Commands are single characters followed by specific arguments (spaces
 ; are ignored):
 ;
-; j       - jump to the current address as a subroutine
-; /[nnnn] - print the value in the current address. pass a second
+; !       - jump to the current address as a subroutine
+; .[nnnn] - print the value in the current address. pass a second
 ;           address to print everything in the range.
+; +       - increment the address
+; -       - decrement the address
 ;
-; To write a byte to your address, simply enter the byte followed
-; by a comma. You can write as many bytes as you need and they will
-; go into the following addresses like this:
+; To write a byte to your address, simply enter the byte in hex. To
+; write more bytes into the following addresses, use a comma:
 ;
-;   1000 01,02,03,
+;   1000 01,02,03
 ;
 ; This command will write a $01 into $1000, a $02 in $1001 and a $03
 ; into $1002.
 ;
 ; KNOWN BUGS:
-; - You can overflow the input buffer.
-; - You can underflow the input buffer with backspace.
-; - Trailing characters after a command are ignored.
-; - If you print an address range and don't start on an xxx0 address,
-;   it will look strange.
-; - In places where hex is expected, you can type something else to
-;   get broken results.
+; - You can overflow the input buffer, which will overwwrite your
+;   address.
+; - Invalid inputs produce garbage output.
 
 DELETE = 127
 
@@ -43,21 +40,20 @@ parse  = $0102 ;   2b
   .org $e000
 
 start:
+  ; initialise the stack to the top of ram
   ld   sp,$bfff
- 
-  ld   hl,$0000
+  ; start at address $1000
+  ld   hl,$1000
   ld   (addr),hl
-
-  ld   hl,message
-  call print
 mainloop:
+  call prompt
   call readl
   call execl
   jr   mainloop
   halt
 
+; buffer a line of input, terminated by \0, not \n
 readl:
-  call prompt
   ld   hl,inputl
 .loop:
   in   a,(SERIAL)
@@ -72,6 +68,9 @@ readl:
   out  (SERIAL),a
   jr   .loop
 .backspace:
+  ld   de,inputl
+  sbc  hl,de
+  jr   z,.loop
   ld   a,'\b'
   out  (SERIAL),a
   ld   a,' '
@@ -85,12 +84,14 @@ readl:
   ld   (hl),'\0'
   ret
 
+; print the prompt, including the address
 prompt:
+  ld   hl,pre_prompt
+  call print
   ld   hl,(addr)
   call hex_word_out
-  ld   hl,prompt_text
-  call print
-  ret
+  ld   hl,post_prompt
+  jp   print
 
 hex_out:
   ld   b,a
@@ -180,21 +181,39 @@ execl:
   call char_from_inputl
   cp   '\0'
   ret  z
-  cp   'j'
+  cp   '+'
+  jr   z,.next
+  cp   '-'
+  jr   z,.prev
+  cp   '!'
   jr   z,.jump
-  cp   '/'
+  cp   '.'
   jr   z,.echo
   call unget_char
   call hex_in
   ld   d,a
   call char_from_inputl
   cp   ','
-  jr   z,.write
+  jp   z,.write
+  ld   b,a
   call unget_char
+  ld   a,b
+  cp   '\0'
+  jp   z,.write
   call hex_in
   ld   e,a
   ld   (addr),de
   jr   .dispatch
+  ret
+.next:
+  ld   hl,(addr)
+  inc  hl
+  ld   (addr),hl
+  ret
+.prev:
+  ld   hl,(addr)
+  dec hl
+  ld   (addr),hl
   ret
 .jump:
   ld   hl,(addr)
@@ -203,11 +222,40 @@ execl:
   call char_from_inputl
   cp   '\0'
   jr   nz,.range_echo
+  ; print the value as a single hex byte
+  ld   hl,type_u8
+  call print
   ld   hl,(addr)
   ld   a,(hl)
   call hex_out
+  ld   a,'\n'
+  out  (SERIAL),a
+  ; print the value as 2 hex bytes (little-endian)
+  ld   hl,type_u16
+  call print
+  ld   hl,(addr)
   inc  hl
-  ld   (addr),hl
+  ld   a,(hl)
+  call hex_out
+  dec  hl
+  ld   a,(hl)
+  call hex_out
+  ld   a,'\n'
+  out  (SERIAL),a
+  ; print the value as an ascii char
+  ld   hl,type_ascii
+  call print
+  ld   hl,(addr)
+  ld   a,(hl)
+  call is_printable
+  jr   nc,.echo_nonprintable
+  out  (SERIAL),a
+  ld   a,'\n'
+  out  (SERIAL),a
+  ret
+.echo_nonprintable:
+  ld   hl,non_printable_char
+  call print
   ld   a,'\n'
   out  (SERIAL),a
   ret
@@ -218,33 +266,14 @@ execl:
   ld   e,l
   ld   hl,(addr)
 .range_echo_loop:
-  ld   a,l
-  and  $0f
-  jr   nz,.range_echo_not_newline
-  ld   a,'\n'
-  out  (SERIAL),a
-  call hex_word_out
-  ld   a,':'
-  out  (SERIAL),a
-  ld   a,' '
-  out  (SERIAL),a
-.range_echo_not_newline:
-  ld   a,(hl)
-  call hex_out
-  ld   a,' '
-  out  (SERIAL),a
-  inc  hl
-  ld   a,d
-  cp   h
-  jr   z,.range_echo_halfeq
-  jr   .range_echo_loop
-.range_echo_halfeq:
-  ld   a,e
-  cp   l
-  jr   nz,.range_echo_loop
-  call hex_out
-  ld   a,'\n'
-  out  (SERIAL),a
+  call print_hexdump_line
+  ; check if we have gone past our final address
+  push hl
+  or   a
+  sbc  hl,de
+  pop  hl
+  jr   c,.range_echo_loop
+  jr   z,.range_echo_loop
   ret
 .write:
   ld   hl,(addr)
@@ -254,16 +283,93 @@ execl:
   jp   .dispatch
   ret
 
+; print a line of a canonical hexdump starting at hl
+print_hexdump_line:
+  push hl
+  ld   hl,hexdump_addr
+  call print
+  pop  hl
+  ; make sure to print from start of line (xxx0)
+  ld   a,l
+  and  $f0
+  ld   l,a
+  push hl
+  call hex_word_out
+  push hl
+  ld   hl,hexdump_addrend
+  call print
+  pop  hl
+.hex_loop:
+  ld   a,(hl)
+  call hex_out
+  ld   a,' '
+  out  (SERIAL),a
+  inc  hl
+  ; check if at start of next line
+  ld   a,l
+  and  $0f
+  ; if not, print next byte
+  jr   nz,.hex_loop
+  ld   a,' '
+  out  (SERIAL),a
+  ; go back to start of original line
+  pop hl
+.ascii_loop:
+  ld   a,(hl)
+  call is_printable
+  jr   nc,.show_dot
+  jr   .ascii_next
+.show_dot:
+  push hl
+  ld   hl,non_printable_char
+  call print
+  pop  hl
+.ascii_next:
+  out  (SERIAL),a
+  inc  hl
+  ld   a,l
+  and  $0f
+  jr   nz,.ascii_loop
+  ld   a,'\n'
+  out  (SERIAL),a
+  ret
+
+; return if a is printable in the carry flag
+is_printable:
+    cp  $20
+    jr  c,.no
+    cp  $7f
+    jr  nc,.no
+    scf
+    ret
+.no:
+    or  a
+    ret
+
+; print null-terminated string (hl)
 print:
   ld   a,(hl)
-  or   a
+  cp   '\0'
   ret  z
   out  (SERIAL),a
   inc  hl
   jr   print
 
-message:
-  .asciiz "OZM ROM Monitor v0.1.0\n\n"
+type_u8:
+  .asciiz "\033[90m   u8: \033[0m0x"
+type_u16:
+  .asciiz "\033[90m  u16: \033[0m0x"
+type_ascii:
+  .asciiz "\033[90mascii: \033[0m"
 
-prompt_text:
-  .asciiz "$ "
+hexdump_addr:
+  .asciiz "\033[34m"
+hexdump_addrend:
+  .ascii  "\033[0m  "
+non_printable_char:
+  .asciiz "\033[90m.\033[0m"
+
+pre_prompt:
+  .asciiz "\033[34m"
+post_prompt:
+  .asciiz "\033[32m ~> \033[0m"
