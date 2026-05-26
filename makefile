@@ -14,7 +14,7 @@ build:
 build/%.o: src/%.c | build
 	$(CC) -c $(CFLAGS) -MMD -MP $< -o $@
 
-build/ozm: build/main.o build/z80.o build/ram.o build/rom.o build/serial.o | build/
+build/ozm: build/main.o build/z80.o build/ram.o build/rom.o build/serial.o | build
 	$(CC) $(CFLAGS) $^ -o $@
 
 build/rom.bin: src/os/bios.asm | build
