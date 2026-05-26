@@ -8,28 +8,16 @@ ASMFLAGS :=
 all: build/ozm build/rom.bin
 
 .PHONY: build
-build/:
-	mkdir -p build/
+build:
+	mkdir -p build
 
-build/main.o: src/main.c src/z80.h src/ram.h src/rom.h src/global.h | build/
-	$(CC) -c $(CFLAGS) $< -o $@
-
-build/z80.o: src/z80.c src/z80.h src/global.h | build/
-	$(CC) -c $(CFLAGS) $< -o $@
-
-build/ram.o: src/ram.c src/ram.h src/z80.h src/global.h | build/
-	$(CC) -c $(CFLAGS) $< -o $@
-
-build/serial.o: src/serial.c src/serial.h src/z80.h src/global.h | build/
-	$(CC) -c $(CFLAGS) $< -o $@
-
-build/rom.o: src/rom.c src/rom.h src/z80.h src/global.h | build/
-	$(CC) -c $(CFLAGS) $< -o $@
+build/%.o: src/%.c | build
+	$(CC) -c $(CFLAGS) -MMD -MP $< -o $@
 
 build/ozm: build/main.o build/z80.o build/ram.o build/rom.o build/serial.o | build/
 	$(CC) $(CFLAGS) $^ -o $@
 
-build/rom.bin: src/os/bios.asm | build/
+build/rom.bin: src/os/bios.asm | build
 	$(Z80ASM) $(ASMFLAGS) -Fbin -dotdir -esc -o $@ $<
 
 .PHONY: run
@@ -42,4 +30,6 @@ dbg: all
 
 .PHONY: clean
 clean:
-	rm -rf build/
+	rm -rf build
+
+-include $(wildcard build/*.d)
