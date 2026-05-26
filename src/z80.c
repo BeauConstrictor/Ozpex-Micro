@@ -717,9 +717,9 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     cpu->d = z80_read(cpu, HL(cpu));
     break;
 
-  // ld e,a
+  // ld d,a
   case 0x57:
-    cpu->e = cpu->a;
+    cpu->d = cpu->a;
     break;
 
   // ld e,b
@@ -1164,6 +1164,24 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   return true;
 }
 
+bool z80_execute_misc(z80_cpu *cpu, byte opcode) {
+  switch (opcode) {
+  case 0x53: {
+    word addr = z80_fetch16(cpu);
+    z80_write(cpu, addr,   cpu->e);
+    z80_write(cpu, addr+1, cpu->d);
+  } break;
+
+  default: {
+    char err[128];
+    snprintf(err, sizeof(err), "unsupported opcode: ed %02x", opcode);
+    z80_error(err);
+  }
+  }
+
+  return true;
+}
+
 z80_instr z80_decode(z80_cpu *cpu) {
   z80_instr instr = {0};
   instr.opcode = -1;
@@ -1191,10 +1209,11 @@ z80_instr z80_decode(z80_cpu *cpu) {
 
   return instr;
 }
-
 bool z80_execute(z80_cpu *cpu, z80_instr *instr) {
   if (instr->prefix_len == 0) {
     return z80_execute_main(cpu, instr->opcode);
+  } else if (instr->prefix_len == 1 && instr->prefix[0] == 0xed) {
+    return z80_execute_misc(cpu, instr->opcode);
   } else {
     z80_error("unsupported prefixed instruction");
     return false;

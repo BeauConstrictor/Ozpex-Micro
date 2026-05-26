@@ -11,9 +11,17 @@
 ; are ignored):
 ;
 ; j       - jump to the current address as a subroutine
-; =nn     - write a value to the current address
 ; /[nnnn] - print the value in the current address. pass a second
 ;           address to print everything in the range.
+;
+; To write a byte to your address, simply enter the byte followed
+; by a comma. You can write as many bytes as you need and they will
+; go into the following addresses like this:
+;
+;   1000 01,02,03,
+;
+; This command will write a $01 into $1000, a $02 in $1001 and a $03
+; into $1002.
 ;
 ; KNOWN BUGS:
 ; - You can overflow the input buffer.
@@ -35,7 +43,7 @@ parse  = $0102 ;   2b
   .org $e000
 
 start:
-  ld   sp,0bfffh
+  ld   sp,$bfff
  
   ld   hl,$0000
   ld   (addr),hl
@@ -176,11 +184,16 @@ execl:
   jr   z,.jump
   cp   '/'
   jr   z,.echo
-  cp   '='
+  call unget_char
+  call hex_in
+  ld   d,a
+  call char_from_inputl
+  cp   ','
   jr   z,.write
   call unget_char
-  call hex_word_in
-  ld   (addr),hl
+  call hex_in
+  ld   e,a
+  ld   (addr),de
   jr   .dispatch
   ret
 .jump:
@@ -234,11 +247,11 @@ execl:
   out  (SERIAL),a
   ret
 .write:
-  call hex_in
   ld   hl,(addr)
-  ld   (hl),a
+  ld   (hl),d
   inc  hl
   ld   (addr),hl
+  jp   .dispatch
   ret
 
 print:
