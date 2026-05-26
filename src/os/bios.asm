@@ -367,7 +367,10 @@ print_hexdump_line:
 .ascii_loop:
   ld   a,(hl)
   call is_printable
+  ; if the char is not printable, show a dot instead
   jr   nc,.show_dot
+  ; otherwise, we are safe to print it
+  out  (SERIAL),a
   jr   .ascii_next
 .show_dot:
   push hl
@@ -375,7 +378,6 @@ print_hexdump_line:
   call print
   pop  hl
 .ascii_next:
-  out  (SERIAL),a
   inc  hl
   ld   a,l
   and  $0f
