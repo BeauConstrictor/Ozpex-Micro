@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "serial.h"
+#include "bdev.h"
 #include "z80.h"
 #include "ram.h"
 #include "rom.h"
@@ -73,6 +74,14 @@ static void setup_rom(z80_cpu *cpu) {
   rom_create(device, "build/rom.bin", 0xe000, 0x2000);
 }
 
+static void setup_bdevs(z80_cpu *cpu) {
+  z80_device *device = &cpu->devices[BLOCK_DEV];
+  bdev_devs *bdevs = bdev_create(device, 0xc000, 0xc101, 0xc100, 0xc102);
+
+  bdev_dev *xmem = bdev_create_xmem();
+  bdev_install(bdevs, 0, xmem);
+}
+
 static void map_memory(z80_cpu *cpu) {
   for (int i = 0; i <= 0xffff; i++) {
     if (i >= 0x0000 && i <= 0xbfff) cpu->mem_map[i] = RAM;
@@ -89,6 +98,7 @@ int main() {
   setup_serial(&cpu);
   setup_ram(&cpu);
   setup_rom(&cpu);
+  setup_bdevs(&cpu);
   map_memory(&cpu);
 
   cpu.pc = 0xe000;

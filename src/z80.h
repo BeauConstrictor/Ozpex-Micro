@@ -16,7 +16,6 @@ typedef struct {
   z80_device devices[256];
   uint8_t mem_map[65536]; // an index into devices; the device to
                              // use at any given memory addr
-  bool halt;
 
   byte (*io_in)(word port);
   void (*io_out)(word port, byte addr);
