@@ -1142,6 +1142,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_cp(cpu, cpu->l);
     break;
 
+  // cp (hl)
+  case 0xbe:
+    z80_cp(cpu, z80_read(cpu, HL(cpu)));
+    break;
+
   // ret nz
   case 0xc0:
     z80_ret(cpu, !z80_getflag(cpu, F_Z));
