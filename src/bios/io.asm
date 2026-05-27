@@ -18,6 +18,8 @@ readl:
   jr   z,.done
   cp   DELETE
   jr   z,.backspace
+  cp   '\b'
+  jr   z,.backspace
   cp   '\033'
   jr   z,.esc
   ; write the char to the end of the buffer
