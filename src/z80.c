@@ -10,8 +10,9 @@
 #define F_N  1
 #define F_C  0
 
-#define HL(cpu) ( z80_pair(cpu->h, cpu->l) )
+#define BC(cpu) ( z80_pair(cpu->b, cpu->c) )
 #define DE(cpu) ( z80_pair(cpu->d, cpu->e) )
+#define HL(cpu) ( z80_pair(cpu->h, cpu->l) )
 
 // NOTE:
 // throughout this code, the bool type is used to represent a bit,
@@ -1232,6 +1233,12 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
 bool z80_execute_misc(z80_cpu *cpu, byte opcode) {
   switch (opcode) {
+
+  // sbc hl,bc
+  case 0x42:
+    z80_sbc_16bit(cpu, BC(cpu));
+    break;
+
   // ld (nn),de
   case 0x53: {
     word addr = z80_fetch16(cpu);
@@ -1240,9 +1247,9 @@ bool z80_execute_misc(z80_cpu *cpu, byte opcode) {
   } break;
 
   // sbc hl,de
-  case 0x52: {
+  case 0x52:
     z80_sbc_16bit(cpu, DE(cpu));
-  } break;
+    break;
 
   default: {
     char err[128];
