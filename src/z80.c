@@ -1216,6 +1216,16 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_jp(cpu, HL(cpu), true);
     break;
 
+  // ex de,hl
+  case 0xeb: {
+    word orig_d = cpu->d;
+    word orig_e = cpu->e;
+    cpu->d = cpu->h;
+    cpu->e = cpu->l;
+    cpu->h = orig_d;
+    cpu->l = orig_e;
+  } break;
+
   // cp n
   case 0xfe:
     z80_cp(cpu, z80_fetch(cpu));
