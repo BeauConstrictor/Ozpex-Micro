@@ -1162,6 +1162,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_jp(cpu, z80_fetch16(cpu), true);
     break;
 
+  // push bc
+  case 0xc5:
+    z80_push16(cpu, BC(cpu));
+    break;
+
   // add a,n
   case 0xc6:
     z80_add_8bit(cpu, z80_fetch(cpu), 0);
@@ -1175,6 +1180,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   // ret
   case 0xc9:
     z80_ret(cpu, true);
+    break;
+
+  // jp z,nn
+  case 0xca:
+    z80_jp(cpu, z80_fetch16(cpu), z80_getflag(cpu, F_Z));
     break;
 
   // call nn
@@ -1197,11 +1207,6 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   // in a,(n)
   case 0xdb:
     cpu->a = cpu->io_in(z80_pair(cpu->a, z80_fetch(cpu)));
-    break;
-
-  // jp z,nn
-  case 0xca:
-    z80_jp(cpu, z80_fetch16(cpu), z80_getflag(cpu, F_Z));
     break;
 
   // pop hl
