@@ -278,6 +278,11 @@ static void z80_sbc_16bit(z80_cpu *cpu, word b) {
   z80_sub_16bit(cpu, b, z80_getflag(cpu, F_C));
 }
 
+static void z80_ret(z80_cpu *cpu, bool condition) {
+  if (condition)
+    cpu->pc = z80_pop16(cpu);
+}
+
 static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   (void)cpu;
 
@@ -1131,10 +1136,15 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_cp(cpu, cpu->l);
     break;
 
+  // ret nz
+  case 0xc0:
+    z80_ret(cpu, !z80_getflag(cpu, F_Z));
+    break;
+
   // jp nn
-  case 0xc3: {
+  case 0xc3:
     z80_jp(cpu, z80_fetch16(cpu), true);
-  } break;
+    break;
 
   // add a,n
   case 0xc6:
@@ -1143,12 +1153,12 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // ret z
   case 0xc8:
-    if (z80_getflag(cpu, F_Z)) cpu->pc = z80_pop16(cpu);
+    z80_ret(cpu, z80_getflag(cpu, F_Z));
     break;
 
   // ret
   case 0xc9:
-    cpu->pc = z80_pop16(cpu);
+    z80_ret(cpu, true);
     break;
 
   // call nn

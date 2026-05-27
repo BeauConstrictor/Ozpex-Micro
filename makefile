@@ -14,17 +14,21 @@ build:
 	mkdir -p build
 
 build/%.o: src/%.c | build
-	$(CC) -c $(CFLAGS) -MMD -MP $< -o $@
+	$(CC) -c $(CFLAGS) -MMD -MP -Ibuild $< -o $@
 
 build/ozm: build/main.o build/z80.o build/ram.o build/rom.o build/serial.o build/bdev.o | build
 	$(CC) $(CFLAGS) $^ -o $@
 
-build/rom.bin: $(ASMFILES) | build
+build/bios.bin: $(ASMFILES) | build
 	$(Z80ASM) $(ASMFLAGS) -Fbin -dotdir -esc -o $@ src/bios/main.asm
+
+build/bios.h: build/bios.bin
+	xxd -i $< > $@
 
 .PHONY: run
 run: all
-	build/ozm -m xm@00 -m bdsk:testdisk.bin@00
+	# build/ozm -m xm@00 -m bdsk:testdisk.bin@ff
+	build/ozm
 
 .PHONY: dbg
 dbg: all

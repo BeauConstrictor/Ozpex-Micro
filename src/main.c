@@ -171,7 +171,7 @@ static void setup_system(z80_cpu *cpu, int argc, char **argv) {
       0xc102);
   (void)bdevs;
 
-  char bios[PATH_MAX] = "build/rom.bin";
+  char *bios = NULL;
 
   static struct option long_options[] = {
         {"help",    no_argument,       0, 'h'},
@@ -192,7 +192,7 @@ static void setup_system(z80_cpu *cpu, int argc, char **argv) {
       exit(0);
 
     case 'b':
-      printf("BIOS file: %s\n", optarg);
+      bios = optarg;
       break;
 
     case 'm': {

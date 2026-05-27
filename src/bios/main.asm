@@ -55,7 +55,8 @@ load_bootsect:
   ret
 
 list_devices:
-  ld   b,00
+  ld   b,0 ; device slot number
+  ld   e,0 ; number of devices found
 .loop:
   ld   a,b
   ld   (DEV_SELECT),a
@@ -63,6 +64,7 @@ list_devices:
   and  $f0
   cp   0
   jr   z,.no_device
+  inc  e
   ld   hl,number_style
   call print
   ld   a,b
@@ -94,12 +96,17 @@ list_devices:
 .not_bootable:
   ld   a,'\n'
 .no_device:
-  out  (SERIAL),a
   inc  b
+  out  (SERIAL),a
   jr   nz,.loop
   ld   a,'\n'
   out  (SERIAL),a
-  ret
+  ld   a,e
+  cp   0
+  ret  nz
+  ld   hl,bootmenu_empty
+  call print
+  jp   monitor
 
   .include "io.asm"
   .include "monitor.asm"
@@ -108,6 +115,8 @@ bootmenu_msg:
   .text   "\033[35mOzpex Micro BIOS v0.1.0\033[0m\n"
   .text   "\033[90mPress <ESC> to enter the debug monitor.\033[0m\n\n" 
   .asciiz "Select a device to boot to:\n\n"
+bootmenu_empty:
+  .asciiz "\033[3A\033[2KNo devices installed, booting debug monitor instead...\n\n"
 bootmenu_prompt:
   .asciiz "~> \033[35m"
 ansi_reset:

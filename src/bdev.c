@@ -147,7 +147,7 @@ static byte bdev_read(void *state, word addr) {
   }
 
   if (dev == NULL) {
-    bdev_error("ozm: attempted read to an empty device slot");
+    bdev_error("attempted read to an empty device slot");
   }
 
   byte block_addr = addr - devs->block_s;
