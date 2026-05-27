@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define VERSION "v0.0.0"
+
 #define DEBUG false
 
 typedef uint8_t byte;

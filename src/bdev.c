@@ -1,4 +1,5 @@
 #include <string.h>
+#include <unistd.h>
 #include <stdio.h>
 
 #include "z80.h"
@@ -58,6 +59,7 @@ static void bdev_sectd_flush(bdev_sectd *dev, byte sector) {
   fseek(dev->image, 0x100 * sector, SEEK_SET);
   fwrite(dev->buffer, 1, 0x100, dev->image);
   fflush(dev->image);
+  fsync(fileno(dev->image));
 }
 
 static void bdev_sectd_setsect(bdev_sectd *dev, byte new) {

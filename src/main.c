@@ -2,6 +2,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <getopt.h>
+#include <limits.h>
+#include <string.h>
+#include <errno.h>
+#include <ctype.h>
 #include <stdio.h>
 
 #include "serial.h"
@@ -13,6 +18,21 @@
 #define RAM 1
 #define BLOCK_DEV 2
 #define ROM 3
+
+const char *HELP_MSG =
+  "Usage: ozm [OPTION]...\n"
+  "Start the ozm emulator.\n"
+  "\n"
+  "TODO";
+
+const char *VERSION_MSG = 
+  "ozm (Ozpex Micro Emulator) " VERSION "\n"
+  "Copyright (c) 2026 Beau Constrictor\n"
+  "License GPLv2: GNU GPL version 2 <https://gnu.org/licenses/gpl.html>.\n"
+  "This is free software: you are free to change and redistribute it.\n"
+  "There is NO WARRANTY, to the extent permitted by law.\n"
+  "\n"
+  "Written by Beau Constrictor.\n";
 
 struct termios old_termios;
 
@@ -36,7 +56,7 @@ static void error(const char *s) {
   exit(1);
 }
 
-static void start_ozm(z80_cpu *cpu) {
+void start_ozm(z80_cpu *cpu) {
   if (DEBUG)
     printf("\033[2J");
 
@@ -60,39 +80,135 @@ static void start_ozm(z80_cpu *cpu) {
     }
 }
 
-static void setup_serial(z80_cpu *cpu) {
+typedef struct {
+    char id[64];
+    char *path;
+    unsigned int slot;
+} mount;
+
+int parse_mount(char *input, mount *out) {
+    if (!input || !out) return -1;
+
+    char *at = strchr(input, '@');
+    if (!at) return -1;
+
+    *at = '\0';
+    char *rhs = at + 1;
+
+    char *endptr;
+    errno = 0;
+    unsigned long v = strtoul(rhs, &endptr, 16);
+    if (errno != 0 || *endptr != '\0' || v > 0xFF) {
+        return -1;
+    }
+
+    out->slot = (unsigned int)v;
+
+    char *lhs = input;
+    char *colon = strchr(lhs, ':');
+
+    if (colon) {
+        *colon = '\0';
+        out->path = colon + 1;
+    } else {
+        out->path = NULL;
+    }
+
+    if (*lhs == '\0') return -1;
+
+    size_t len = strlen(lhs);
+    if (len >= sizeof(out->id)) return -1;
+
+    for (size_t i = 0; i < len; i++) {
+        if (!isalnum((unsigned char)lhs[i])) {
+            return -1;
+        }
+    }
+
+    strcpy(out->id, lhs);
+
+    return 0;
+}
+
+static void install_bdev(bdev_devs *devs, const char *id,
+    const char *path, unsigned int slot) {
+
+  if (strcmp(id, "xm") == 0) {
+    bdev_dev *xmem = bdev_create_xmem();
+    bdev_install(devs, slot, xmem);
+  }
+
+  else if (strcmp(id, "disk") == 0 || strcmp(id, "bdsk") == 0) {
+    bool bootable = strcmp(id, "bdsk") == 0;
+
+    if (!path)
+      error("sectored storage devices require a disk image path");
+    FILE *f = fopen(path, "r+b");
+    if (!f)
+      error("cannot open disk image");
+    bdev_dev *sectd = bdev_create_sectd(bootable, f);
+    if (!sectd)
+      error("disk image is not 65536 bytes in size");
+    bdev_install(devs, slot, sectd);
+  }
+
+  else {
+    error("unknown device type");
+  }
+}
+
+static void setup_system(z80_cpu *cpu, int argc, char **argv) {
+  int opt;
+
   cpu->io_in = serial_in;
   cpu->io_out = serial_out;
-}
 
-static void setup_ram(z80_cpu *cpu) {
-  z80_device *device = &cpu->devices[RAM];
-  ram_create(device);
-}
+  z80_device *ram = &cpu->devices[RAM];
+  ram_create(ram);
 
-static void setup_rom(z80_cpu *cpu) {
-  z80_device *device = &cpu->devices[ROM];
-  rom_create(device, "build/rom.bin", 0xe000, 0x2000);
-}
-
-static void setup_bdevs(z80_cpu *cpu) {
-  z80_device *device = &cpu->devices[BLOCK_DEV];
-  bdev_devs *bdevs = bdev_create(device, 0xc000, 0xc101, 0xc100,
+  z80_device *_bdevs = &cpu->devices[BLOCK_DEV];
+  bdev_devs *bdevs = bdev_create(_bdevs, 0xc000, 0xc101, 0xc100,
       0xc102);
+  (void)bdevs;
 
-  bdev_dev *xmem = bdev_create_xmem();
-  bdev_install(bdevs, 0, xmem);
+  char bios[PATH_MAX] = "build/rom.bin";
 
-  FILE *f = fopen("testdisk.bin", "r+b");
-  if (!f)
-    error("cannot open disk image");
-  bdev_dev *sectd = bdev_create_sectd(true, f);
-  if (!sectd)
-    error("disk image is not 65536 bytes in size");
-  bdev_install(bdevs, 1, sectd);
-}
+  static struct option long_options[] = {
+        {"help",    no_argument,       0, 'h'},
+        {"version", no_argument,       0, 'v'},
+        {"bios",    required_argument, 0, 'b'},
+        {"mount",   required_argument, 0, 'm'},
+        {0, 0, 0, 0}
+  };
 
-static void map_memory(z80_cpu *cpu) {
+  while ((opt = getopt_long(argc, argv, "hvb:m:", long_options, NULL)) != -1) {
+    switch (opt) {
+    case 'h':
+      printf("%s", HELP_MSG);
+      exit(0);
+
+    case 'v':
+      printf("%s", VERSION_MSG);
+      exit(0);
+
+    case 'b':
+      printf("BIOS file: %s\n", optarg);
+      break;
+
+    case 'm': {
+      mount m;
+      parse_mount(optarg, &m);
+      install_bdev(bdevs, m.id, m.path, m.slot);
+    } break;
+
+    default:
+        error("Try 'ozm --help' for more information.\n");
+    }
+  }
+
+  z80_device *rom = &cpu->devices[ROM];
+  rom_create(rom, bios, 0xe000, 0x2000);
+
   for (int i = 0; i <= 0xffff; i++) {
     if (i >= 0x0000 && i <= 0xbfff) cpu->mem_map[i] = RAM;
     if (i >= 0xc000 && i <= 0xc102) cpu->mem_map[i] = BLOCK_DEV;
@@ -100,19 +216,15 @@ static void map_memory(z80_cpu *cpu) {
   }
 }
 
-int main() {
+int main(int argc, char **argv) {
   initialise_terminal();
   atexit(restore_terminal);
 
   z80_cpu cpu = {0};
-  setup_serial(&cpu);
-  setup_bdevs(&cpu);
-  setup_ram(&cpu);
-  setup_rom(&cpu);
-  map_memory(&cpu);
+
+  setup_system(&cpu, argc, argv);
 
   cpu.pc = 0xe000;
-
   start_ozm(&cpu);
  
   return 0;

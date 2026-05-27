@@ -24,7 +24,7 @@ build/rom.bin: $(ASMFILES) | build
 
 .PHONY: run
 run: all
-	build/ozm
+	build/ozm -m xm@00 -m bdsk:testdisk.bin@00
 
 .PHONY: dbg
 dbg: all
