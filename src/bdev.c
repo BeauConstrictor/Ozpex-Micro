@@ -117,7 +117,7 @@ static byte bdev_status(bdev_devs *devs) {
   bdev_dev *dev = devs->devices[devs->selected];
 
   if (dev == NULL) {
-    bdev_error("attempt to access empty device slot");
+    return 0x00; // empty device's status
   }
 
   byte status = 0;
@@ -164,20 +164,20 @@ static void bdev_write(void *state, word addr, byte val) {
   bdev_devs *devs = (bdev_devs*)state;
   bdev_dev *dev = devs->devices[devs->selected];
 
-  if (dev == NULL) {
-    bdev_error("attempt to access empty device slot");
+  if (addr == devs->dev_s) {
+    if (dev != NULL)
+      bdev_flush(dev, devs->sector);
+    devs->selected = val;
+    dev = devs->devices[val];
+    if (dev != NULL)
+      bdev_setsect(devs, dev, devs->sector); // load sector on new device
     return;
   }
 
-  if (addr == devs->dev_s) {
-    bdev_flush(dev, devs->sector);
-    devs->selected = val;
-    dev = devs->devices[val];
-    if (dev == NULL) {
-      bdev_error("attempt to access empty device slot");
-      return;
-    }
-    bdev_setsect(devs, dev, devs->sector); // load sector on new device
+  if (dev == NULL) {
+    char err[64];
+    snprintf(err, sizeof(err), "attempt to manipulate empty device: %02x", devs->selected);
+    bdev_error(err);
     return;
   }
 

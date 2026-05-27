@@ -4,6 +4,8 @@ CFLAGS := -g -Wall -Wextra -Werror -Wimplicit-fallthrough
 Z80ASM := vasmz80_oldstyle
 ASMFLAGS := 
 
+ASMFILES := $(wildcard src/bios/*.asm)
+
 .PHONY: all
 all: build/ozm build/rom.bin
 
@@ -17,8 +19,8 @@ build/%.o: src/%.c | build
 build/ozm: build/main.o build/z80.o build/ram.o build/rom.o build/serial.o build/bdev.o | build
 	$(CC) $(CFLAGS) $^ -o $@
 
-build/rom.bin: src/os/bios.asm | build
-	$(Z80ASM) $(ASMFLAGS) -Fbin -dotdir -esc -o $@ $<
+build/rom.bin: $(ASMFILES) | build
+	$(Z80ASM) $(ASMFLAGS) -Fbin -dotdir -esc -o $@ src/bios/main.asm
 
 .PHONY: run
 run: all
