@@ -1157,6 +1157,13 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_ret(cpu, !z80_getflag(cpu, F_Z));
     break;
 
+  // pop bc
+  case 0xc1: {
+    word bc = z80_pop16(cpu);
+    cpu->b = bc >> 7;
+    cpu->c = bc & 0xff;
+  } break;
+
   // jp nn
   case 0xc3:
     z80_jp(cpu, z80_fetch16(cpu), true);
