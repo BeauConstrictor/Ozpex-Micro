@@ -27,8 +27,7 @@ build/bios.h: build/bios.bin
 
 .PHONY: run
 run: all
-	# build/ozm -m xm@00 -m bdsk:testdisk.bin@ff
-	build/ozm
+	build/ozm -m xm@00 -m bdsk:testdisk.bin@ff
 
 .PHONY: dbg
 dbg: all

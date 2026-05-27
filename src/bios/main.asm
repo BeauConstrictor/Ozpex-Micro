@@ -8,6 +8,9 @@ BOOTLOADER = $0000
 DEV_SECTD = $01 << 4
 DEV_XMEM  = $02 << 4
 
+BUSY      = %00000010
+DEV_ID    = %11110000
+
   .org $e000
 
 start:
@@ -31,12 +34,22 @@ bootmenu:
   call load_bootsect
   jp   BOOTLOADER
 
+; wait until the busy flag is 0
+; clobbers: a
+busy_wait:
+  ld   a,(DEV_STATUS)
+  and  BUSY
+  jr   nz,busy_wait
+  ret
+
 ; load sector 0 of the disk in the a register into BOOTLOADER
 load_bootsect:
   ; move to sector 0 of the chosen device
   ld   (DEV_SELECT),a
+  call busy_wait
   ld   a,0
   ld   (DEV_SECTOR),a
+  call busy_wait
   ; get pointers
   ld   de,BOOTLOADER
   ld   hl,DEV_READ
