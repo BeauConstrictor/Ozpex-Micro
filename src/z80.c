@@ -1239,6 +1239,33 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_sub_8bit(cpu, z80_fetch(cpu), 0);
     break;
 
+  // exx
+  case 0xd9: {
+    uint8_t tmp = cpu->b;
+    cpu->b = cpu->b_;
+    cpu->b_ = tmp;
+
+    tmp = cpu->c;
+    cpu->c = cpu->c_;
+    cpu->c_ = tmp;
+
+    tmp = cpu->d;
+    cpu->d = cpu->d_;
+    cpu->d_ = tmp;
+
+    tmp = cpu->e;
+    cpu->e = cpu->e_;
+    cpu->e_ = tmp;
+
+    tmp = cpu->h;
+    cpu->h = cpu->h_;
+    cpu->h_ = tmp;
+
+    tmp = cpu->l;
+    cpu->l = cpu->l_;
+    cpu->l_ = tmp;
+  } break;
+
   // in a,(n)
   case 0xdb:
     cpu->a = cpu->io_in(z80_pair(cpu->a, z80_fetch(cpu)));
