@@ -1349,6 +1349,14 @@ bool z80_execute_misc(z80_cpu *cpu, byte opcode) {
     z80_sbc_16bit(cpu, DE(cpu));
     break;
 
+  // ld de,(nn)
+  case 0x5b: {
+    word addr = z80_fetch16(cpu);
+    word val = z80_read(cpu, addr);
+    cpu->d = val >> 8;
+    cpu->e = val & 0xff;
+  } break;
+
   default: {
     char err[128];
     snprintf(err, sizeof(err), "unsupported opcode: ed %02x", opcode);
