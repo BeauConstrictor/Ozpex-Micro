@@ -15,6 +15,8 @@
 #define DE(cpu) ( z80_pair(cpu->d, cpu->e) )
 #define HL(cpu) ( z80_pair(cpu->h, cpu->l) )
 
+#define SWAP(x,y) do { int tmp = x; x = y; y = tmp; } while (0)
+
 // NOTE:
 // throughout this code, the bool type is used to represent a bit,
 // where i don't explicitly do a x == 0 ? 0 : 1, as bools implicitly
@@ -1241,29 +1243,12 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
 
   // exx
   case 0xd9: {
-    uint8_t tmp = cpu->b;
-    cpu->b = cpu->b_;
-    cpu->b_ = tmp;
-
-    tmp = cpu->c;
-    cpu->c = cpu->c_;
-    cpu->c_ = tmp;
-
-    tmp = cpu->d;
-    cpu->d = cpu->d_;
-    cpu->d_ = tmp;
-
-    tmp = cpu->e;
-    cpu->e = cpu->e_;
-    cpu->e_ = tmp;
-
-    tmp = cpu->h;
-    cpu->h = cpu->h_;
-    cpu->h_ = tmp;
-
-    tmp = cpu->l;
-    cpu->l = cpu->l_;
-    cpu->l_ = tmp;
+    SWAP(cpu->b, cpu->b_);
+    SWAP(cpu->c, cpu->c_);
+    SWAP(cpu->d, cpu->d_);
+    SWAP(cpu->e, cpu->e_);
+    SWAP(cpu->h, cpu->h_);
+    SWAP(cpu->l, cpu->l_);
   } break;
 
   // in a,(n)
