@@ -10,6 +10,7 @@
 #define F_N  1
 #define F_C  0
 
+#define AF(cpu) ( z80_pair(cpu->a, cpu->f) )
 #define BC(cpu) ( z80_pair(cpu->b, cpu->c) )
 #define DE(cpu) ( z80_pair(cpu->d, cpu->e) )
 #define HL(cpu) ( z80_pair(cpu->h, cpu->l) )
@@ -1266,6 +1267,17 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   // or n
   case 0xf6:
     z80_or(cpu, z80_fetch(cpu));
+    break;
+
+  // pop af
+  case 0xf1:
+    cpu->f = z80_pop(cpu);
+    cpu->a = z80_pop(cpu);
+    break;
+
+  // push af
+  case 0xf5:
+    z80_push16(cpu, AF(cpu));
     break;
 
   // cp n
