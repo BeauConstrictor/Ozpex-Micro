@@ -1155,6 +1155,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_cp(cpu, cpu->b);
     break;
 
+  // cp c
+  case 0xb9:
+    z80_cp(cpu, cpu->c);
+    break;
+
   // cp h
   case 0xbc:
     z80_cp(cpu, cpu->h);
