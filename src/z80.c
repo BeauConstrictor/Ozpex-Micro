@@ -284,6 +284,16 @@ static void z80_ret(z80_cpu *cpu, bool condition) {
     cpu->pc = z80_pop16(cpu);
 }
 
+static void z80_xor(z80_cpu *cpu, byte val) {
+  cpu->a ^= val;
+  z80_flag(cpu, F_C,  false);
+  z80_flag(cpu, F_N,  false);
+  z80_flag(cpu, F_PV, z80_parity(cpu->a));
+  z80_flag(cpu, F_H,  false);
+  z80_flag(cpu, F_z,  cpu->a == 0);
+  z80_flag(cpu, F_z,  cpu->a >> 7);
+}
+
 static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   (void)cpu;
 
@@ -1115,6 +1125,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   // sbc a,a
   case 0x9f:
     z80_sbc_8bit(cpu, cpu->a);
+    break;
+
+  // xor a
+  case 0xaf:
+    z80_xor(cpu, cpu->a);
     break;
 
   // or b
