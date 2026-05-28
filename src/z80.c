@@ -290,8 +290,8 @@ static void z80_xor(z80_cpu *cpu, byte val) {
   z80_flag(cpu, F_N,  false);
   z80_flag(cpu, F_PV, z80_parity(cpu->a));
   z80_flag(cpu, F_H,  false);
-  z80_flag(cpu, F_z,  cpu->a == 0);
-  z80_flag(cpu, F_z,  cpu->a >> 7);
+  z80_flag(cpu, F_Z,  cpu->a == 0);
+  z80_flag(cpu, F_S,  cpu->a >> 7);
 }
 
 static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
@@ -1262,6 +1262,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     cpu->h = orig_d;
     cpu->l = orig_e;
   } break;
+
+  // or n
+  case 0xf6:
+    z80_or(cpu, z80_fetch(cpu));
+    break;
 
   // cp n
   case 0xfe:
