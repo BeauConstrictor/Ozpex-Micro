@@ -1217,9 +1217,21 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     cpu->pc = addr;
   } break;
 
+  // pop de
+  case 0xd1: {
+    word de = z80_pop16(cpu);
+    cpu->d  = de >> 8;
+    cpu->e  = de & 0xff;
+  } break;
+
   // out (n),a
   case 0xd3:
     cpu->io_out(z80_pair(cpu->a, z80_fetch(cpu)), cpu->a);
+    break;
+
+  // push de
+  case 0xd5:
+    z80_push16(cpu, DE(cpu));
     break;
 
   // sub n
