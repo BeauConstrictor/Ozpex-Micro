@@ -1219,6 +1219,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     cpu->pc = addr;
   } break;
 
+  // ret nc
+  case 0xd0:
+    z80_ret(cpu, !z80_getflag(cpu, F_C));
+    break;
+
   // pop de
   case 0xd1: {
     word de = z80_pop16(cpu);
