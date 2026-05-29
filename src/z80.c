@@ -104,7 +104,6 @@ static void z80_dec_8bit(z80_cpu *cpu, uint8_t *val) {
 static void z80_rlcx(z80_cpu *cpu, byte *val) {
   bool old_bit = *val & 0x80;
   *val = *val << 1;
-  *val |= old_bit;
   z80_flag(cpu, F_C, old_bit);
   z80_flag(cpu, F_N, 0);
   z80_flag(cpu, F_H, 0);
@@ -113,7 +112,6 @@ static void z80_rlcx(z80_cpu *cpu, byte *val) {
 static void z80_rrcx(z80_cpu *cpu, byte *val) {
   bool old_bit = *val & 0x01;
   *val = *val >> 1;
-  *val |= old_bit << 7;
   z80_flag(cpu, F_C, old_bit);
   z80_flag(cpu, F_N, 0);
   z80_flag(cpu, F_H, 0);
