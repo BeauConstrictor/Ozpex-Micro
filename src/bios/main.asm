@@ -9,6 +9,7 @@ DEV_SECTD = $01 << 4
 DEV_XMEM  = $02 << 4
 
 BUSY      = %00000010
+BOOTABLE  = %00000100
 DEV_ID    = %11110000
 
   .org $e000
@@ -16,6 +17,28 @@ DEV_ID    = %11110000
 start:
   ; initialise the stack to the top of ram
   ld   sp,$bfff
+
+find_device:
+  ld    hl,finding_msg
+  call  print
+  ld    a,0
+  ld    b,0
+  ld    (DEV_SELECT),a
+.loop:
+  call busy_wait
+  ld    a,(DEV_STATUS)
+  and   BOOTABLE
+  jr    nz,.found
+  ld    a,(DEV_SELECT)
+  inc   a
+  ld    (DEV_SELECT),a
+  djnz  .loop
+  call  busy_wait
+  jp    bootmenu ; no bootable device found
+.found:
+  ld    a,(DEV_SELECT)
+  call load_bootsect
+  jp   BOOTLOADER
 
 bootmenu:
   ld   hl,bootmenu_msg
@@ -31,6 +54,8 @@ bootmenu:
   cp   '\0'
   jr   z,.ask_device
   call hex_in
+  call verify_device
+  jr   z,.ask_device
   call load_bootsect
   jp   BOOTLOADER
 
@@ -40,6 +65,18 @@ busy_wait:
   ld   a,(DEV_STATUS)
   and  BUSY
   jr   nz,busy_wait
+  ret
+
+; checks if there is a device connected in slot a. does not check if
+; that device is 'bootable'. returns nz if device is found.
+; clobbers: b
+verify_device:
+  ld   b,a
+  ld   (DEV_SELECT),a
+  call busy_wait
+  ld   a,(DEV_STATUS)
+  cp   0
+  ld   a,b
   ret
 
 ; load sector 0 of the disk in the a register into BOOTLOADER
@@ -101,7 +138,7 @@ list_devices:
   ld   hl,unknown_name
 .check_bootable:
   ld   a,(DEV_STATUS)
-  and  1 << 2
+  and  BOOTABLE
   cp   0
   jr   z,.not_bootable
   ld   hl,bootable_msg
@@ -124,6 +161,8 @@ list_devices:
   .include "io.asm"
   .include "monitor.asm"
 
+finding_msg:
+  .asciiz "\033[90mFinding bootable device...\n\n\033[0m"
 bootmenu_msg:
   .text   "\033[35mOzpex Micro BIOS v0.1.0\033[0m\n"
   .text   "\033[90mPress <ESC> to enter the debug monitor.\033[0m\n\n" 
