@@ -21,9 +21,20 @@
 
 const char *HELP_MSG =
   "Usage: ozm [OPTION]...\n"
-  "Start the ozm emulator.\n"
+  "An Ozpex Micro emulator.\n"
+  "Example: ozm -m bdsk:os-m.bin@0\n"
   "\n"
-  "TODO";
+  "Options:\n"
+  "  -h, --help                            Show this help text and exit\n"
+  "  -v, --version                         Show version information and exit\n"
+  "  -b, --bios <IMAGE>                    Use an alternative BIOS image\n"
+  "  -m, --mount <DEVICE>[:<ARG>]@<0xSLOT> Use an alternative BIOS image\n"
+  "\n"
+  "Devices:\n"
+  "  bdsk <IMAGE>                          A disk image, marked as bootable\n"
+  "  disk <IMAGE>                          A disk image\n"
+  "  xmem                                  A 64K extended memory module\n"
+;
 
 const char *VERSION_MSG = 
   "ozm (Ozpex Micro Emulator) " VERSION "\n"
@@ -43,8 +54,7 @@ static void initialise_terminal() {
   raw = old_termios;
 
   raw.c_lflag &= ~(ICANON | ECHO);
-
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
 static void restore_terminal() {
