@@ -1264,6 +1264,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     SWAP(cpu->l, cpu->l_);
   } break;
 
+  // jp c,(nn)
+  case 0xda:
+    z80_jp(cpu, z80_fetch16(cpu), z80_getflag(cpu, F_C));
+    break;
+
   // in a,(n)
   case 0xdb:
     cpu->a = cpu->io_in(z80_pair(cpu->a, z80_fetch(cpu)));
