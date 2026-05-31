@@ -13,6 +13,9 @@ my Ozpex family.  The Micro expands on the goals of the
 Z80 CPU, which is much easier to write software for thanks to it's
 richer instruction set.
 
+I have developed a full DOS for this computer, which you can find
+[here](https://github.com/beauconstrictor/os-micro).
+
 ## Extensibility
 
 Just like the 128, the Micro's design is rooted in extensibility -
