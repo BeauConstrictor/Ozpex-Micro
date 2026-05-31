@@ -143,7 +143,7 @@ int parse_mount(char *input, mount *out) {
 static void install_bdev(bdev_devs *devs, const char *id,
     const char *path, unsigned int slot) {
 
-  if (strcmp(id, "xm") == 0) {
+  if (strcmp(id, "xmem") == 0) {
     bdev_dev *xmem = bdev_create_xmem();
     bdev_install(devs, slot, xmem);
   }
