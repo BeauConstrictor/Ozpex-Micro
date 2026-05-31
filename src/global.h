@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define VERSION "v0.0.0"
+#define VERSION "v0.1.0"
 
 #define DEBUG false
 

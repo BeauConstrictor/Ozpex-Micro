@@ -1,0 +1,58 @@
+0x00:    pause - anything other than 0 will make the timer advance
+0x01-02: milliseconds since seconds tick 0x03:    seconds since
+minutes tick 0x04:    minutes since hours tick 0x05:    hours since
+day tick 0x06:    days since month tick 0x07:    months since year
+tick 0x08-09: years since timer start 0x0a:    if zero, timer holds a
+'duration', if nonzero, timer holds
+         a 'date'
+
+(all values wrap when the previous increments)
+
+you can write to any of these values and all smaller units will be
+set to zero, so you start setting a date from the largest units down.
+this is so you can easily start a timer at 0 by just setting the
+years to 0.
+
+all timers start paused with all units set to 0, but once they
+have been given a state, they should retain that state between
+power cycles.  also, timers should keep ticking when the power is off.
+
+if a timer's year somehow overflows past 65536, it should reset
+back to 0.
+
+timer's have standard api id $3
+
+# duration mode
+
+in duration mode, millisecond will tick every ms, second will tick
+every 1000 milliseconds, minute will tick every 60 seconds, hour
+will tick every 60 minutes, day will tick every 24 hours, month
+will tick every 30 days and year will tick every 12 months. every
+unit will reset to zero when it's next larger unit ticks.
+
+in duration mode, the month goes from 0-11 and wraps back to 0
+instead of ticking to 12.
+
+# date mode
+
+in date mode, everything behaves the same up until month, which
+ticks depending on however many days are in that month. if month is
+currently 1 (never set it to 0 in this mode!), month will tick after
+31 days and so on. also, in date mode, if the month is divisible by
+(4 and not 100) or 400, then month will tick after 29 days when
+it's value is two instead of 28 days normally.
+
+no matter the timer's mode, the twelve bytes starting at 0x10 will
+contain the number of days in each month (always 28 for feb).
+
+in date mode, the month goes from 1-12 and wraps back to one when
+year ticks.
+
+# sector byte
+
+changing the sector byte will switch between any of 256 different
+independently ticking timers. not every rtcm will have all 256
+profiles, so you should ensure the high byte is $ff in a sector
+before doing anything as this indicates that the sector is actually
+handled by the rtc.
+
