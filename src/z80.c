@@ -1259,6 +1259,11 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_sub_8bit(cpu, z80_fetch(cpu), 0);
     break;
 
+  // ret c
+  case 0xd8:
+    z80_ret(cpu, z80_getflag(cpu, F_C));
+    break;
+
   // exx
   case 0xd9: {
     SWAP(cpu->b, cpu->b_);
