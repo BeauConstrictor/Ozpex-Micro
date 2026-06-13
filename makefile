@@ -5,15 +5,19 @@ Z80ASM := vasmz80_oldstyle
 ASMFLAGS := 
 
 ASMFILES := $(wildcard src/bios/*.asm)
+HEADERS := $(wildcard src/*.h)
 
 .PHONY: all
-all: build/ozm build/rom.bin
+all: build/ozm
 
 .PHONY: build
 build:
 	mkdir -p build
 
-build/%.o: src/%.c | build
+build/%.o: src/%.c $(HEADERS) | build
+	$(CC) -c $(CFLAGS) -MMD -MP -Ibuild $< -o $@
+
+build/rom.o: src/rom.c build/bios.h $(HEADERS) | build
 	$(CC) -c $(CFLAGS) -MMD -MP -Ibuild $< -o $@
 
 build/ozm: build/main.o build/z80.o build/ram.o build/rom.o build/serial.o build/bdev.o | build
@@ -22,7 +26,7 @@ build/ozm: build/main.o build/z80.o build/ram.o build/rom.o build/serial.o build
 build/bios.bin: $(ASMFILES) | build
 	$(Z80ASM) $(ASMFLAGS) -Fbin -dotdir -esc -o $@ src/bios/main.asm
 
-build/bios.h: build/bios.bin
+build/bios.h: build/bios.bin | build
 	xxd -i $< > $@
 
 .PHONY: run
@@ -36,5 +40,3 @@ dbg: all
 .PHONY: clean
 clean:
 	rm -rf build
-
--include $(wildcard build/*.d)
