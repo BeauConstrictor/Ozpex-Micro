@@ -38,7 +38,7 @@ it supports (extended memory, disk, real time clock, etc.).
 
 For the Ozpex Micro, an emulator was written from the ground up in
 C for excellent performance, as opposed to forking the 64's emulator
-as the 128 did
+as the 128 did.
 
 ### 1. Download & Build
 

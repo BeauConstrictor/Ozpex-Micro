@@ -1371,8 +1371,8 @@ bool z80_execute_misc(z80_cpu *cpu, byte opcode) {
   // ld de,(nn)
   case 0x5b: {
     word addr = z80_fetch16(cpu);
-    cpu->d = z80_read(cpu, addr);
-    cpu->e = z80_read(cpu, addr+1);
+    cpu->e = z80_read(cpu, addr);
+    cpu->d = z80_read(cpu, addr+1);
   } break;
 
   default: {
