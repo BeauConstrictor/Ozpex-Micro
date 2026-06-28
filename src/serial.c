@@ -6,12 +6,14 @@
 
 #include "serial.h"
 
+static FILE* serial_devices[256] = {0};
+
 static void serial_err(const char *s) {
   fprintf(stderr, "ozm: %s\n", s);
   exit(1);
 }
 
-char getchar_nonblock(void) {
+static char getchar_nonblock(void) {
     char c;
     fd_set set;
     struct timeval timeout = {0, 0};
@@ -29,15 +31,32 @@ char getchar_nonblock(void) {
     return 0;
 }
 
+void serial_mount(byte port, const char *path) {
+  FILE *f = fopen(path, "w");
+  if (!f) perror("ozm");
+  serial_devices[port] = f;
+}
+
 byte serial_in(word port) {
   port &= 0xff;
-  if (port != 0) serial_err("currently, only port 0 is supported");
+  if (port != 0) serial_err("only port 0 is readable");
   return getchar_nonblock();
 }
 
 void serial_out(word port, byte val) {
   port &= 0xff;
-  if (port != 0) serial_err("currently, only port 0 is supported");
-  putchar(val);
-  fflush(stdout);
+
+  if (port == 0) {
+    putchar(val);
+    fflush(stdout);
+    return;
+  }
+
+  FILE *f = serial_devices[port];
+  if (!f) {
+    fprintf(stderr, "ozm: attempted to print to the empty port %d\n", port);
+    return;
+  }
+  putc(val, f);
+  fflush(f);
 }

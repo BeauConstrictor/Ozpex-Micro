@@ -28,7 +28,8 @@ const char *HELP_MSG =
   "  -h, --help                            Show this help text and exit\n"
   "  -v, --version                         Show version information and exit\n"
   "  -b, --bios <IMAGE>                    Use an alternative BIOS image\n"
-  "  -m, --mount <DEVICE>[:<ARG>]@<0xSLOT> Use an alternative BIOS image\n"
+  "  -m, --mount <DEVICE>[:<ARG>]@<SLOT>   Mount a device.\n"
+  "  -p  --printer <PATH>@<SLOT>           Connect a file as a virtual printer\n"
   "\n"
   "Devices:\n"
   "  bdsk <IMAGE>                          A disk image, marked as bootable\n"
@@ -188,10 +189,11 @@ static void setup_system(z80_cpu *cpu, int argc, char **argv) {
         {"version", no_argument,       0, 'v'},
         {"bios",    required_argument, 0, 'b'},
         {"mount",   required_argument, 0, 'm'},
+        {"printer", required_argument, 0, 'p'},
         {0, 0, 0, 0}
   };
 
-  while ((opt = getopt_long(argc, argv, "hvb:m:", long_options, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hvb:m:p:", long_options, NULL)) != -1) {
     switch (opt) {
     case 'h':
       printf("%s", HELP_MSG);
@@ -209,6 +211,17 @@ static void setup_system(z80_cpu *cpu, int argc, char **argv) {
       mount m;
       parse_mount(optarg, &m);
       install_bdev(bdevs, m.id, m.path, m.slot);
+    } break;
+
+    case 'p': {
+      char path[100];
+      unsigned int port;
+
+      if (sscanf(optarg, "%99[^@]@%2X", path, &port) == 2) {
+        serial_mount(port, path);
+      } else {
+        error("invalid printer syntax");
+      }
     } break;
 
     default:

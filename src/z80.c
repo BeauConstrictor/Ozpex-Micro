@@ -1163,6 +1163,15 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
     z80_cp(cpu, cpu->c);
     break;
 
+  // cp d
+  case 0xba:
+    z80_cp(cpu, cpu->d);
+    break;
+
+  case 0xbb:
+    z80_cp(cpu, cpu->e);
+    break;
+
   // cp h
   case 0xbc:
     z80_cp(cpu, cpu->h);
@@ -1374,6 +1383,11 @@ bool z80_execute_misc(z80_cpu *cpu, byte opcode) {
     cpu->e = z80_read(cpu, addr);
     cpu->d = z80_read(cpu, addr+1);
   } break;
+
+  // out (c),a
+  case 0x79:
+    cpu->io_out(BC(cpu), cpu->a);
+    break;
 
   default: {
     char err[128];
