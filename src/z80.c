@@ -1195,7 +1195,7 @@ static bool z80_execute_main(z80_cpu *cpu, byte opcode) {
   // pop bc
   case 0xc1: {
     word bc = z80_pop16(cpu);
-    cpu->b = bc >> 7;
+    cpu->b = bc >> 8;
     cpu->c = bc & 0xff;
   } break;
 
